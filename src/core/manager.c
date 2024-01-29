@@ -129,6 +129,10 @@ neu_manager_t *neu_manager_create()
     manager->timestamp_lev_manager = 0;
 
     neu_metrics_init();
+    /*
+        start webserver with restful api
+        check plugins/restful/rest.c
+    */
     start_static_adapter(manager, DEFAULT_DASHBOARD_PLUGIN_NAME);
 
     if (manager_load_plugin(manager) != 0) {
