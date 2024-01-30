@@ -196,6 +196,12 @@ inline static const char *neu_reqresp_type_string(neu_reqresp_type_e type)
     return neu_reqresp_type_string_t[type];
 }
 
+/**
+ * @brief Structure representing the header of a Neuron request or response.
+ *
+ * This structure contains information about the type, context, sender, receiver, and length
+ * of a Neuron request or response.
+ */
 typedef struct neu_reqresp_head {
     neu_reqresp_type_e type;
     void *             ctx;
@@ -204,112 +210,177 @@ typedef struct neu_reqresp_head {
     uint32_t           len;
 } neu_reqresp_head_t;
 
+/**
+ * @brief Structure representing an error response.
+ *
+ * This structure includes an integer field for representing error codes.
+ */
 typedef struct neu_resp_error {
     int error;
 } neu_resp_error_t;
 
+/**
+ * @brief Structure representing a request for initializing or uninitializing a Neuron node.
+ *
+ * This structure includes the name of the node and its running state.
+ */
 typedef struct {
-    char                     node[NEU_NODE_NAME_LEN];
-    neu_node_running_state_e state;
+    char                     node[NEU_NODE_NAME_LEN];   ///< Name of the Neuron node.
+    neu_node_running_state_e state;                     ///< Running state of the Neuron node.
 } neu_req_node_init_t, neu_req_node_uninit_t, neu_resp_node_uninit_t;
 
+/**
+ * @brief Structure representing a request for adding a plugin to Neuron.
+ *
+ * This structure includes the library, schema file, and shared object file associated with the plugin.
+ */
 typedef struct neu_req_add_plugin {
-    char  library[NEU_PLUGIN_LIBRARY_LEN];
-    char *schema_file;
-    char *so_file;
+    char  library[NEU_PLUGIN_LIBRARY_LEN];  ///< Library name of the plugin.
+    char *schema_file;                      ///< Schema file associated with the plugin.
+    char *so_file;                          ///< Shared object file associated with the plugin.
 } neu_req_add_plugin_t;
 
+/**
+ * @brief Typedef to represent a request for updating a plugin, using the same structure.
+ */
 typedef neu_req_add_plugin_t neu_req_update_plugin_t;
 
+/**
+ * @brief Structure representing a request to delete a plugin.
+ */
 typedef struct neu_req_del_plugin {
     char plugin[NEU_PLUGIN_NAME_LEN];
 } neu_req_del_plugin_t;
 
+/**
+ * @brief Structure representing a request to get plugin information.
+ */
 typedef struct neu_req_get_plugin {
 } neu_req_get_plugin_t;
 
+/**
+ * @brief Structure representing the response with plugin information.
+ */
 typedef struct neu_resp_plugin_info {
-    char schema[NEU_PLUGIN_NAME_LEN];
-    char name[NEU_PLUGIN_NAME_LEN];
-    char description[NEU_PLUGIN_DESCRIPTION_LEN];
-    char description_zh[NEU_PLUGIN_DESCRIPTION_LEN];
-    char library[NEU_PLUGIN_LIBRARY_LEN];
+    char schema[NEU_PLUGIN_NAME_LEN];               ///< Schema of the plugin.
+    char name[NEU_PLUGIN_NAME_LEN];                 ///< Name of the plugin.
+    char description[NEU_PLUGIN_DESCRIPTION_LEN];   ///< Description of the plugin.
+    char description_zh[NEU_PLUGIN_DESCRIPTION_LEN];///< Chinese description of the plugin.
+    char library[NEU_PLUGIN_LIBRARY_LEN];           ///< Library file of the plugin.
 
-    neu_plugin_kind_e kind;
-    neu_node_type_e   type;
-    uint32_t          version;
+    neu_plugin_kind_e kind;                         ///< Kind of the plugin.
+    neu_node_type_e   type;                         ///< Type of the plugin.
+    uint32_t          version;                      ///< Version of the plugin.
 
-    bool single;
-    bool display;
-    char single_name[NEU_NODE_NAME_LEN];
+    bool single;                                    ///< Indicates if the plugin is a single instance.
+    bool display;                                   ///< Indicates if the plugin should be displayed.
+    char single_name[NEU_NODE_NAME_LEN];            ///< Name of the single instance.
 } neu_resp_plugin_info_t;
 
+/**
+ * @brief Structure representing the response with a list of plugins.
+ */
 typedef struct neu_resp_get_plugin {
-    UT_array *plugins; // array neu_resp_plugin_info_t
+    UT_array *plugins;      ///< Array of `neu_resp_plugin_info_t` representing plugin information.
 } neu_resp_get_plugin_t;
 
+/**
+ * @brief Structure representing a request to add a new node.
+ */
 typedef struct neu_req_add_node {
-    char  node[NEU_NODE_NAME_LEN];
-    char  plugin[NEU_PLUGIN_NAME_LEN];
-    char *setting;
+    char  node[NEU_NODE_NAME_LEN];      ///< Name of the new node.
+    char  plugin[NEU_PLUGIN_NAME_LEN];  ///< Name of the plugin associated with the node.
+    char *setting;                      ///< Configuration settings for the node.
 } neu_req_add_node_t;
 
+/**
+ * @brief Frees the allocated memory for the settings in `neu_req_add_node_t`.
+ *
+ * @param req Pointer to the `neu_req_add_node_t` structure.
+ */
 static inline void neu_req_add_node_fini(neu_req_add_node_t *req)
 {
     free(req->setting);
 }
 
+/**
+ * @brief Structure representing a request to update a node.
+ */
 typedef struct neu_req_update_node {
-    char node[NEU_NODE_NAME_LEN];
-    char new_name[NEU_NODE_NAME_LEN];
+    char node[NEU_NODE_NAME_LEN];       ///< Current name of the node to be updated.
+    char new_name[NEU_NODE_NAME_LEN];   ///< New name for the node.
 } neu_req_update_node_t;
 
+/**
+ * @brief Structure representing a request to delete a node.
+ */
 typedef struct neu_req_del_node {
-    char node[NEU_NODE_NAME_LEN];
+    char node[NEU_NODE_NAME_LEN];       ///< Name of the node to be deleted.
 } neu_req_del_node_t;
 
+/**
+ * @brief Structure representing a request to get information about a node.
+ */
 typedef struct neu_req_get_node {
-    neu_node_type_e type;
-    char            plugin[NEU_PLUGIN_NAME_LEN];
-    char            node[NEU_NODE_NAME_LEN];
+    neu_node_type_e type;                           ///< Type of the node to get information about.
+    char            plugin[NEU_PLUGIN_NAME_LEN];    ///< Name of the plugin associated with the node.
+    char            node[NEU_NODE_NAME_LEN];        ///< Name of the node to get information about.
 } neu_req_get_node_t;
 
+/**
+ * @brief Structure representing information about a node in response to a request.
+ */
 typedef struct neu_resp_node_info {
-    char node[NEU_NODE_NAME_LEN];
-    char plugin[NEU_PLUGIN_NAME_LEN];
+    char node[NEU_NODE_NAME_LEN];       ///< Name of the node.
+    char plugin[NEU_PLUGIN_NAME_LEN];   ///< Name of the plugin associated with the node.
 } neu_resp_node_info_t;
 
+/**
+ * @brief Structure representing the response with a list of nodes.
+ */
 typedef struct neu_resp_get_node {
-    UT_array *nodes; // array neu_resp_node_info_t
+    UT_array *nodes; ///< Array of `neu_resp_node_info_t` representing node information.
 } neu_resp_get_node_t;
 
+/**
+ * @brief Structure representing a request to add a group.
+ */
 typedef struct {
-    char     driver[NEU_NODE_NAME_LEN];
-    char     group[NEU_GROUP_NAME_LEN];
-    uint32_t interval;
+    char     driver[NEU_NODE_NAME_LEN];     ///< Name of the driver.
+    char     group[NEU_GROUP_NAME_LEN];     ///< Name of the group.
+    uint32_t interval;                      ///< Interval value.
 } neu_req_add_group_t;
 
+/**
+ * @brief Structure representing a request to update a group.
+ */
 typedef struct {
-    char     driver[NEU_NODE_NAME_LEN];
-    char     group[NEU_GROUP_NAME_LEN];
-    char     new_name[NEU_GROUP_NAME_LEN];
-    uint32_t interval;
+    char     driver[NEU_NODE_NAME_LEN];     ///< Name of the driver
+    char     group[NEU_GROUP_NAME_LEN];     ///< Name of the group.
+    char     new_name[NEU_GROUP_NAME_LEN];  ///< New name for the group.
+    uint32_t interval;                      ///< Interval value.
 } neu_req_update_group_t;
 
+/**
+ * @brief Structure representing a response to update a group.
+ */
 typedef struct {
-    char driver[NEU_NODE_NAME_LEN];
-    char group[NEU_GROUP_NAME_LEN];
-    char new_name[NEU_GROUP_NAME_LEN];
+    char driver[NEU_NODE_NAME_LEN];         ///< Name of the driver.
+    char group[NEU_GROUP_NAME_LEN];         ///< Name of the group.
+    char new_name[NEU_GROUP_NAME_LEN];      ///< New name for the group.
     struct {
-        int      error;
-        uint32_t unused; // padding for memory layout compatible with
+        int      error;                     ///< Error code.
+        uint32_t unused; ///< Padding for memory layout compatible with
                          // neu_req_update_group_t
     };
 } neu_resp_update_group_t;
 
+/**
+ * @brief Structure representing a request to delete a group.
+ */
 typedef struct neu_req_del_group {
-    char driver[NEU_NODE_NAME_LEN];
-    char group[NEU_GROUP_NAME_LEN];
+    char driver[NEU_NODE_NAME_LEN];         ///< Name of the driver.
+    char group[NEU_GROUP_NAME_LEN];         ///< Name of the group.
 } neu_req_del_group_t;
 
 typedef struct neu_req_get_group {

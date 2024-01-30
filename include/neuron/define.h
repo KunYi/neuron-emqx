@@ -112,6 +112,9 @@ typedef enum {
     NEU_NODE_LINK_STATE_CONNECTED    = 1,
 } neu_node_link_state_e;
 
+/**
+ * @brief Enumeration representing the running states of a Neuron node.
+ */
 typedef enum {
     NEU_NODE_RUNNING_STATE_INIT    = 1,
     NEU_NODE_RUNNING_STATE_READY   = 2,
