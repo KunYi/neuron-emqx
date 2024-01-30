@@ -78,21 +78,35 @@ void neu_plugin_manager_destroy(neu_plugin_manager_t *mgr)
     free(mgr);
 }
 
+/**
+ * @brief Add a plugin to the plugin manager.
+ *
+ * This function attempts to open a dynamic library specified by the given plugin_lib_name
+ * in various paths. If successful, it validates the plugin module and adds it to the manager.
+ *
+ * @param mgr Pointer to the neu_plugin_manager_t structure.
+ * @param plugin_lib_name Name of the plugin dynamic library.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ */
 int neu_plugin_manager_add(neu_plugin_manager_t *mgr,
                            const char *          plugin_lib_name)
 {
-    char                 lib_path[256]    = { 0 };
-    void *               handle           = NULL;
-    void *               module           = NULL;
-    neu_plugin_module_t *pm               = NULL;
-    plugin_entity_t *    plugin           = NULL;
-    char                 lib_paths[3][64] = { 0 };
+    char                 lib_path[256]    = { 0 };  // Buffer to store the full path of the dynamic library
+    void *               handle           = NULL;   // Handle for the loaded dynamic library
+    void *               module           = NULL;   // Pointer to the plugin module
+    neu_plugin_module_t *pm               = NULL;   // Pointer to the plugin module structure
+    plugin_entity_t *    plugin           = NULL;   // Pointer to the plugin entity structure
+    char                 lib_paths[3][64] = { 0 };  // Array of paths to search for dynamic libraries
+
+    // Initialize the paths for dynamic library search
     snprintf(lib_paths[0], sizeof(lib_paths[0]), "%s", g_plugin_dir);
     snprintf(lib_paths[1], sizeof(lib_paths[1]), "%s/system", g_plugin_dir);
     snprintf(lib_paths[2], sizeof(lib_paths[2]), "%s/custom", g_plugin_dir);
 
+    // Assert that the length of the plugin_lib_name is within bounds
     assert(strlen(plugin_lib_name) <= NEU_PLUGIN_LIBRARY_LEN);
 
+    // Iterate through the paths and attempt to open the dynamic library
     for (size_t i = 0; i < sizeof(lib_paths) / sizeof(lib_paths[0]); i++) {
 
         snprintf(lib_path, sizeof(lib_path) - 1, "%s/%s", lib_paths[i],
@@ -108,10 +122,12 @@ int neu_plugin_manager_add(neu_plugin_manager_t *mgr,
         }
     }
 
+    // Check if the dynamic library was successfully opened
     if (handle == NULL) {
         return NEU_ERR_LIBRARY_FAILED_TO_OPEN;
     }
 
+    // Retrieve the plugin module symbol from the dynamic library
     module = dlsym(handle, "neu_plugin_module");
     if (module == NULL) {
         dlclose(handle);
@@ -119,6 +135,7 @@ int neu_plugin_manager_add(neu_plugin_manager_t *mgr,
         return NEU_ERR_LIBRARY_MODULE_INVALID;
     }
 
+    // Cast the module pointer to the neu_plugin_module_t structure
     pm = (neu_plugin_module_t *) module;
     if (pm->kind != NEU_PLUGIN_KIND_CUSTOM &&
         pm->kind != NEU_PLUGIN_KIND_SYSTEM) {
@@ -127,12 +144,14 @@ int neu_plugin_manager_add(neu_plugin_manager_t *mgr,
         return NEU_ERR_LIBRARY_INFO_INVALID;
     }
 
+    // Validate the plugin's kind and type
     if (pm->type != NEU_NA_TYPE_APP && pm->type != NEU_NA_TYPE_DRIVER) {
         dlclose(handle);
         nlog_warn("library: %s, type wrong: %d", lib_path, pm->type);
         return NEU_ERR_LIBRARY_INFO_INVALID;
     }
 
+    // Validate the plugin's version
     uint32_t major = NEU_GET_VERSION_MAJOR(pm->version);
     uint32_t minor = NEU_GET_VERSION_MINOR(pm->version);
 
@@ -142,13 +161,17 @@ int neu_plugin_manager_add(neu_plugin_manager_t *mgr,
         return NEU_ERR_LIBRARY_MODULE_VERSION_NOT_MATCH;
     }
 
+    // Check if a plugin with the same name already exists
     HASH_FIND_STR(mgr->plugins, pm->module_name, plugin);
     if (plugin != NULL) {
         dlclose(handle);
         return NEU_ERR_LIBRARY_NAME_CONFLICT;
     }
+
+    // Allocate memory for the plugin entity structure
     plugin = calloc(1, sizeof(plugin_entity_t));
 
+    // Copy relevant information from the plugin module to the plugin entity
     plugin->version        = pm->version;
     plugin->display        = pm->display;
     plugin->type           = pm->type;
@@ -159,16 +182,21 @@ int neu_plugin_manager_add(neu_plugin_manager_t *mgr,
     plugin->description    = strdup(pm->module_descr);
     plugin->description_zh = strdup(pm->module_descr_zh);
     plugin->single         = pm->single;
+    // Copy the single_name if the plugin is a single type
     if (plugin->single) {
         plugin->single_name = strdup(pm->single_name);
     }
 
+    // Add the plugin entity to the manager's hash table
     HASH_ADD_STR(mgr->plugins, name, plugin);
 
+    // Log success message
     nlog_notice("add plugin, name: %s, library: %s, kind: %d, type: %d",
                 plugin->name, plugin->lib_name, plugin->kind, plugin->type);
 
+    // Close the dynamic library
     dlclose(handle);
+    // Return success code
     return NEU_ERR_SUCCESS;
 }
 
