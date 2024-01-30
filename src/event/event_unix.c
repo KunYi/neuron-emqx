@@ -30,10 +30,18 @@
 
 #include <sys/event.h>
 
+/**
+ * @struct neu_event_timer
+ * @brief Structure representing a timer event.
+ *
+ * The `neu_event_timer` structure is used to store information about a timer event,
+ * including its unique identifier (`id`), user data (`usr_data`), and a callback
+ * function (`timer`) to be triggered when the timer expires.
+ */
 struct neu_event_timer {
-    int                      id;
-    void *                   usr_data;
-    neu_event_timer_callback timer;
+    int                      id;        ///< Unique identifier for the timer event.
+    void *                   usr_data;  ///< User data associated with the timer.
+    neu_event_timer_callback timer;     ///< Callback function triggered when the timer expires.
 };
 
 struct neu_event_io {
@@ -125,51 +133,88 @@ neu_events_t *neu_event_new(void)
     return events; // Return the newly created neu_events_t structure
 };
 
+/**
+ * @brief Close and release resources associated with an event manager.
+ *
+ * This function stops the event loop associated with the given `neu_events_t` structure,
+ * waits for the event loop thread to finish using `pthread_join`, and releases resources
+ * such as the mutex and the structure itself.
+ *
+ * @param events Pointer to the `neu_events_t` structure.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ */
 int neu_event_close(neu_events_t *events)
 {
-    pthread_mutex_lock(&events->mtx);
-    events->running = false;
-    pthread_mutex_unlock(&events->mtx);
+    pthread_mutex_lock(&events->mtx);       // Lock the mutex for synchronization
+    events->running = false;                // Set running flag to false
+    pthread_mutex_unlock(&events->mtx);     // Unlock the mutex
 
-    pthread_join(events->thread, NULL);
-    pthread_mutex_destroy(&events->mtx);
+    pthread_join(events->thread, NULL);     // Wait for the event loop thread to finish
+    pthread_mutex_destroy(&events->mtx);    // Destroy the mutex
 
-    free(events);
-    return 0;
+    free(events); // Free memory allocated for the `neu_events_t` structure
+    return NEU_ERR_SUCCESS; // Return success code
 }
 
+/**
+ * @brief Add a timer event to the event manager.
+ *
+ * This function adds a timer event to the event manager associated with the given
+ * `neu_events_t` structure. It creates a new `neu_event_timer_t` structure to store
+ * the timer's information, sets up a kevent structure to describe the timer event,
+ * and adds the event to the kqueue.
+ *
+ * @param events Pointer to the `neu_events_t` structure.
+ * @param timer Timer parameters including user data, callback, and duration.
+ * @return Pointer to the created `neu_event_timer_t` structure.
+ */
 neu_event_timer_t *neu_event_add_timer(neu_events_t *          events,
                                        neu_event_timer_param_t timer)
 {
-    struct kevent      ke  = { 0 };
-    neu_event_timer_t *ctx = calloc(1, sizeof(neu_event_timer_t));
+    struct kevent      ke  = { 0 }; // Structure to describe the timer event
+    neu_event_timer_t *ctx = calloc(1, sizeof(neu_event_timer_t));  // Allocate memory for timer context
     int                ret = 0;
 
-    ctx->id       = events->timer_id++;
-    ctx->usr_data = timer.usr_data;
-    ctx->timer    = timer.cb;
+    ctx->id       = events->timer_id++; // Assign a unique ID to the timer
+    ctx->usr_data = timer.usr_data;     // Set user data for the timer
+    ctx->timer    = timer.cb;           // Set the callback function for the timer
 
+    // Set up the kevent structure to describe the timer event (add and enable)
     EV_SET(&ke, ctx->id, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0,
            timer.second * 1000 + timer.millisecond, ctx);
 
-    ret = kevent(events->kq, &ke, 1, NULL, 0, NULL);
+    ret = kevent(events->kq, &ke, 1, NULL, 0, NULL); // Add the timer event to the kqueue
 
+    // Log information about the added timer
     log_info("add timer, second: %ld, millisecond: %ld, timer: %d in epoll %d, "
              "ret: %d",
              timer.second, timer.millisecond, ctx->id, events->kq, ret);
-    return ctx;
+    return ctx; // Return the created neu_event_timer_t structure
 }
 
+/**
+ * @brief Delete a timer event from the event manager.
+ *
+ * This function removes a timer event from the event manager associated with the given
+ * `neu_events_t` structure. It sets up a kevent structure to describe the timer event
+ * with the EV_DELETE flag and deletes the event from the kqueue. The memory allocated
+ * for the `neu_event_timer_t` structure is also freed.
+ *
+ * @param events Pointer to the `neu_events_t` structure.
+ * @param timer Pointer to the `neu_event_timer_t` structure to be deleted.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ */
 int neu_event_del_timer(neu_events_t *events, neu_event_timer_t *timer)
 {
-    struct kevent ke = { 0 };
+    struct kevent ke = { 0 }; // Structure to describe the timer event
 
+    // Set up the kevent structure to describe the timer event with the EV_DELETE flag
     EV_SET(&ke, timer->id, EVFILT_TIMER, EV_DELETE, 0, 0, timer);
 
+    // Delete the timer event from the kqueue
     kevent(events->kq, &ke, 1, NULL, 0, NULL);
-
-    free(timer);
-    return 0;
+    free(timer); // Free memory allocated for the neu_event_timer_t structure
+    return NEU_ERR_SUCCESS; // Return success code
 }
 
 neu_event_io_t *neu_event_add_io(neu_events_t *events, neu_event_io_param_t io)
