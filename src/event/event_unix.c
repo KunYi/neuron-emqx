@@ -39,18 +39,36 @@ struct neu_event_timer {
 struct neu_event_io {
 };
 
+/**
+ * @struct neu_events
+ * @brief Structure representing an event manager.
+ *
+ * The `neu_events` structure is used to manage asynchronous events through the
+ * kqueue mechanism. It includes information such as the kqueue file descriptor,
+ * a flag indicating whether the event loop is running, the thread handling the
+ * event loop, a mutex for synchronization, and a timer ID.
+ */
 struct neu_events {
-    int             kq;
-    bool            running;
-    pthread_t       thread;
-    pthread_mutex_t mtx;
-    int32_t         timer_id;
+    int             kq;         ///< kqueue file descriptor for event handling.
+    bool            running;    ///< Flag indicating whether the event loop is running.
+    pthread_t       thread;     ///< Thread handling the event loop.
+    pthread_mutex_t mtx;        ///< Mutex for synchronization.
+    int32_t         timer_id;   ///< ID for timer events.
 };
 
+/**
+ * @brief Event loop thread function.
+ *
+ * This function runs in a separate thread and waits for events using the kqueue mechanism.
+ * It checks for timer events and triggers corresponding callback functions.
+ *
+ * @param arg Pointer to the neu_events_t structure.
+ * @return Always returns NULL.
+ */
 static void *event_loop(void *arg)
 {
-    neu_events_t *events  = (neu_events_t *) arg;
-    bool          running = events->running;
+    neu_events_t *events  = (neu_events_t *) arg; // Cast the argument to neu_events_t
+    bool          running = events->running; // Initialize running flag from events
 
     while (running) {
         struct kevent   event   = { 0 };
@@ -58,18 +76,18 @@ static void *event_loop(void *arg)
         int             ret = kevent(events->kq, NULL, 0, &event, 1, &timeout);
 
         if (ret == 0) {
-            continue;
+            continue; // No events, continue waiting
         }
 
         if (ret == -1) {
             log_error("kevent wait error: %d(%s), fd: %d", errno,
                       strerror(errno), events->kq);
-            continue;
+            continue; // Error in kevent, log and continue waiting
         }
 
         if (event.filter == EVFILT_TIMER) {
             neu_event_timer_t *ctx = (neu_event_timer_t *) event.udata;
-
+            // Trigger the timer callback function and log the result
             ret = ctx->timer(ctx->usr_data);
             log_debug("timer trigger: %d, ret: %d", ctx->id, ret);
         }
@@ -82,19 +100,29 @@ static void *event_loop(void *arg)
     return NULL;
 }
 
+/**
+ * @brief Create a new event manager.
+ *
+ * This function allocates memory for a new neu_events_t structure, initializes its
+ * mutex and sets initial values for its members. It also creates a new thread for
+ * the event loop using pthread_create.
+ *
+ * @return Pointer to the newly created neu_events_t structure.
+ */
 neu_events_t *neu_event_new(void)
 {
     neu_events_t *events = calloc(1, sizeof(neu_events_t));
 
-    pthread_mutex_init(&events->mtx, NULL);
+    pthread_mutex_init(&events->mtx, NULL); // Initialize mutex
 
-    events->running  = true;
-    events->kq       = kqueue();
-    events->timer_id = 1;
+    events->running  = true;        // Set running flag to true
+    events->kq       = kqueue();    // Create a new kqueue for event handling
+    events->timer_id = 1;           // Initialize timer ID
 
+    // Create a new thread for the event loop
     pthread_create(&events->thread, NULL, event_loop, events);
 
-    return events;
+    return events; // Return the newly created neu_events_t structure
 };
 
 int neu_event_close(neu_events_t *events)

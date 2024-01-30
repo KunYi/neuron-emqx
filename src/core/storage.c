@@ -104,15 +104,28 @@ void manager_storage_unsubscribe(neu_manager_t *manager, const char *app,
     }
 }
 
+/**
+ * @brief Load and add plugins to the specified manager.
+ *
+ * This function loads plugins using `neu_persister_load_plugins` and adds them
+ * to the plugin manager associated with the given manager using `neu_manager_add_plugin`.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ * @see neu_persister_load_plugins
+ * @see neu_manager_add_plugin
+ */
 int manager_load_plugin(neu_manager_t *manager)
 {
-    UT_array *plugin_infos = NULL;
+    UT_array *plugin_infos = NULL; // Array to store plugin information (names)
 
+    // Load plugins using neu_persister_load_plugins
     int rv = neu_persister_load_plugins(&plugin_infos);
     if (rv != 0) {
-        return rv;
+        return rv; // Return error code if loading plugins fails
     }
 
+    // Iterate through the loaded plugin names and add them to the manager
     utarray_foreach(plugin_infos, char **, name)
     {
         rv                    = neu_manager_add_plugin(manager, *name);
@@ -120,10 +133,12 @@ int manager_load_plugin(neu_manager_t *manager)
         nlog_notice("load plugin %s, lib:%s", ok_or_err, *name);
     }
 
+    // Free the memory allocated for plugin names
     utarray_foreach(plugin_infos, char **, name) { free(*name); }
+    // Free the memory allocated for the plugin information array
     utarray_free(plugin_infos);
 
-    return rv;
+    return rv; // Return the final result of loading and adding plugins
 }
 
 int manager_load_node(neu_manager_t *manager)

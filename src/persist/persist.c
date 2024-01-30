@@ -51,6 +51,7 @@
 
 #define PATH_MAX_SIZE 128
 
+static const char *     default_plugin_file = "config/default_plugins.json";
 static const char *     plugin_file = "persistence/plugins.json";
 static const char *     tmp_path    = "tmp";
 static neu_persister_t *g_impl      = NULL;
@@ -204,46 +205,78 @@ static int load_plugins_file(const char *fname, UT_array *plugin_infos)
     return 0;
 }
 
+/**
+ * @brief Comparison function for sorting an array of strings.
+ *
+ * This function is designed to be used as a comparison function for sorting an array
+ * of strings. It compares two strings pointed to by `a` and `b` using the standard
+ * `strcmp` function.
+ *
+ * @param a Pointer to the first string.
+ * @param b Pointer to the second string.
+ * @return An integer less than, equal to, or greater than zero if the first string is
+ *         found to be less than, equal to, or greater than the second string.
+ */
 static int ut_str_cmp(const void *a, const void *b)
 {
     return strcmp(*(char **) a, *(char **) b);
 }
 
+/**
+ * @brief Load plugins from configuration files and prepare a list of unique plugin names.
+ *
+ * This function loads plugins from both the default configuration file and a user-specific
+ * configuration file. It then combines and sorts the plugin names, removing duplicates,
+ * and returns the result in the form of a UT_array.
+ *
+ * @param[out] plugin_infos Pointer to the UT_array structure to store plugin names.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ */
 int neu_persister_load_plugins(UT_array **plugin_infos)
 {
-    UT_array *default_plugins = NULL;
-    UT_array *user_plugins    = NULL;
+    UT_array *default_plugins = NULL; // Array to store names of default plugins
+    UT_array *user_plugins    = NULL; // Array to store names of user-specific plugins
+
+    // Initialize UT_arrays for default and user-specific plugins
     utarray_new(default_plugins, &ut_ptr_icd);
     utarray_new(user_plugins, &ut_ptr_icd);
 
     // default plugins will always present
+    // Load default plugins from the default configuration file
     if (0 !=
-        load_plugins_file("config/default_plugins.json", default_plugins)) {
+        load_plugins_file(default_plugin_file, default_plugins)) {
         nlog_warn("cannot load default plugins");
     }
+
     // user plugins
+    // Load user-specific plugins from the specified configuration file
     if (0 != load_plugins_file(plugin_file, user_plugins)) {
         nlog_warn("cannot load user plugins");
     } else {
         // the following operation needs sorting
+        // Sort the default plugins array for efficient comparison
         utarray_sort(default_plugins, ut_str_cmp);
     }
 
+    // Iterate through user_plugins, filter out duplicates, and add them to default_plugins
     utarray_foreach(user_plugins, char **, name)
     {
-        // filter out duplicates in case of old persistence data
+        // Filter out duplicates in case of old persistence data
         char **find = utarray_find(default_plugins, name, ut_str_cmp);
         if (NULL == find) {
             utarray_push_back(default_plugins, name);
-            *name = NULL; // move to default_plugins
+            *name = NULL; // Move the name to default_plugins and set the original pointer to NULL
         } else {
-            free(*name);
+            free(*name); // Free the duplicate name
         }
     }
 
+    // Free memory allocated for user_plugins
     utarray_free(user_plugins);
+
+    // Set the final result (default_plugins) to plugin_infos
     *plugin_infos = default_plugins;
-    return 0;
+    return NEU_ERR_SUCCESS; // Return success code
 }
 
 char *neu_persister_save_file_tmp(const char *file_data, uint32_t len,
@@ -313,7 +346,7 @@ int neu_persister_create(const char *schema_dir)
     if (NULL == g_impl) {
         return -1;
     }
-    return 0;
+    return NEU_ERR_SUCCESS;
 }
 
 sqlite3 *neu_persister_get_db()

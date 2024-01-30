@@ -31,8 +31,21 @@
 #include "manager_internal.h"
 #include "storage.h"
 
+/**
+ * @brief Add a plugin to the specified manager.
+ *
+ * This function is a convenience wrapper for adding a plugin to the plugin manager
+ * associated with the given manager. It delegates the actual plugin addition to
+ * neu_plugin_manager_add.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param library Name of the plugin dynamic library to be added.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ * @see neu_plugin_manager_add
+ */
 int neu_manager_add_plugin(neu_manager_t *manager, const char *library)
 {
+    // Delegate the plugin addition to the plugin manager
     return neu_plugin_manager_add(manager->plugin_manager, library);
 }
 
