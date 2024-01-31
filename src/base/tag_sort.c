@@ -24,6 +24,14 @@ static neu_tag_sort_elem_t *array_to_list(UT_array *tags);
 static void                 tag_sort(neu_tag_sort_result_t *result, void *tag,
                                      neu_tag_sort_fn fn, UT_icd icd);
 
+/**
+ * @brief Sorts a UT array of tags based on the provided sorting function and comparison function.
+ *
+ * @param tags The UT array of tags.
+ * @param sort The sorting function.
+ * @param cmp The comparison function.
+ * @return The result structure containing sorted tags.
+ */
 neu_tag_sort_result_t *neu_tag_sort(UT_array *tags, neu_tag_sort_fn sort,
                                     neu_tag_sort_cmp cmp)
 {
@@ -42,6 +50,11 @@ neu_tag_sort_result_t *neu_tag_sort(UT_array *tags, neu_tag_sort_fn sort,
     return result;
 }
 
+/**
+ * @brief Frees the memory occupied by the sorted tags result structure.
+ *
+ * @param result The result structure to be freed.
+ */
 void neu_tag_sort_free(neu_tag_sort_result_t *result)
 {
     for (uint16_t i = 0; i < result->n_sort; i++) {
@@ -52,6 +65,12 @@ void neu_tag_sort_free(neu_tag_sort_result_t *result)
     free(result);
 }
 
+/**
+ * @brief Converts a UT array of tags to a linked list of sort elements.
+ *
+ * @param tags The UT array of tags.
+ * @return The head of the linked list.
+ */
 static neu_tag_sort_elem_t *array_to_list(UT_array *tags)
 {
     neu_tag_sort_elem_t *head = NULL, *tmp = NULL;
@@ -66,6 +85,14 @@ static neu_tag_sort_elem_t *array_to_list(UT_array *tags)
     return head;
 }
 
+/**
+ * @brief Sorts tags based on the provided sorting criteria and comparison function.
+ *
+ * @param result The result structure containing sorted tags.
+ * @param tag The tag to be sorted.
+ * @param fn The sorting criteria function.
+ * @param icd The UT array item deletion callback.
+ */
 static void tag_sort(neu_tag_sort_result_t *result, void *tag,
                      neu_tag_sort_fn fn, UT_icd icd)
 {

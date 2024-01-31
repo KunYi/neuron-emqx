@@ -22,9 +22,22 @@
 
 #include "msg_internal.h"
 
+/**
+ * @brief Generate a message with a given header and data.
+ *
+ * This function generates a message by calculating the size of the data based
+ * on the type, ensuring that the length is sufficient for the header and data,
+ * and copying the data into the message after the header.
+ *
+ * @param header Pointer to the header of the message.
+ * @param data   Pointer to the data to be copied into the message.
+ */
 void neu_msg_gen(neu_reqresp_head_t *header, void *data)
 {
+    // Calculate the size of the data based on the type
     size_t data_size = neu_reqresp_size(header->type);
+    // Ensure that the length is sufficient for the header and data
     assert(header->len >= sizeof(neu_reqresp_head_t) + data_size);
+    // Copy the data into the message after the header
     memcpy((uint8_t *) &header[1], data, data_size);
 }

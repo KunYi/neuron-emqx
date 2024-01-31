@@ -25,14 +25,34 @@
 #include "errcodes.h"
 #include "plugin.h"
 
-#define NEU_PLUGIN_MAGIC_NUMBER 0x43474d50 // a string "PMGC"
+/**
+ * @brief Magic number for identifying Neuron plugins.
+ */
+#define NEU_PLUGIN_MAGIC_NUMBER 0x43474d50 // four characters 'PMGC'
 
+/**
+ * @brief Initialize the common fields of a Neuron plugin.
+ *
+ * This function initializes the magic number and link state of the common
+ * fields in a Neuron plugin.
+ *
+ * @param common Pointer to the common structure of the Neuron plugin.
+ */
 void neu_plugin_common_init(neu_plugin_common_t *common)
 {
     common->magic      = NEU_PLUGIN_MAGIC_NUMBER;
     common->link_state = NEU_NODE_LINK_STATE_DISCONNECTED;
 }
 
+/**
+ * @brief Check if a Neuron plugin is valid based on its magic number.
+ *
+ * This function checks whether a Neuron plugin is valid by comparing its
+ * magic number with the expected value.
+ *
+ * @param plugin Pointer to the Neuron plugin.
+ * @return true if the plugin is valid, false otherwise.
+ */
 bool neu_plugin_common_check(neu_plugin_t *plugin)
 {
     return neu_plugin_to_plugin_common(plugin)->magic == NEU_PLUGIN_MAGIC_NUMBER
@@ -40,6 +60,17 @@ bool neu_plugin_common_check(neu_plugin_t *plugin)
         : false;
 }
 
+/**
+ * @brief Perform a generic operation on a Neuron plugin.
+ *
+ * This function performs a generic operation on a Neuron plugin by invoking
+ * the appropriate command using the plugin's adapter callbacks.
+ *
+ * @param plugin Pointer to the Neuron plugin.
+ * @param head   The header of the request or response.
+ * @param data   Pointer to the data associated with the request or response.
+ * @return The result of the operation.
+ */
 int neu_plugin_op(neu_plugin_t *plugin, neu_reqresp_head_t head, void *data)
 {
     neu_plugin_common_t *plugin_common = neu_plugin_to_plugin_common(plugin);

@@ -37,6 +37,9 @@ pthread_rwlock_t g_metrics_mtx_ = PTHREAD_RWLOCK_INITIALIZER;
 neu_metrics_t    g_metrics_;
 static uint64_t  g_start_ts_;
 
+/**
+ * @brief Retrieves operating system information and stores it in global metrics.
+ */
 static void find_os_info()
 {
     const char *cmd =
@@ -90,6 +93,12 @@ static void find_os_info()
 #endif
 }
 
+
+/**
+ * @brief Parses specific memory fields and returns the value.
+ * @param col Column number to parse
+ * @return Parsed memory value
+ */
 static size_t parse_memory_fields(int col)
 {
     FILE * f       = NULL;
@@ -114,16 +123,28 @@ static size_t parse_memory_fields(int col)
     return val;
 }
 
+/**
+ * @brief Gets the total memory on the system.
+ * @return Total memory size in bytes
+ */
 static inline size_t memory_total()
 {
     return parse_memory_fields(2);
 }
 
+/**
+ * @brief Gets the used memory on the system.
+ * @return Used memory size in bytes
+ */
 static inline size_t memory_used()
 {
     return parse_memory_fields(3);
 }
 
+/**
+ * @brief Gets the memory used by the Neuron process.
+ * @return Neuron process memory usage in bytes
+ */
 static inline size_t neuron_memory_used()
 {
     FILE * f       = NULL;
@@ -149,11 +170,22 @@ static inline size_t neuron_memory_used()
     return val * 1024;
 }
 
+/**
+ * @brief Gets the size of memory cache.
+ * @return Memory cache size in bytes
+ */
 static inline size_t memory_cache()
 {
     return parse_memory_fields(6);
 }
 
+/**
+ * @brief Retrieves disk usage information.
+ * @param size_p Pointer to store total disk size
+ * @param used_p Pointer to store used disk space
+ * @param avail_p Pointer to store available disk space
+ * @return 0 on success, -1 on failure
+ */
 static inline int disk_usage(size_t *size_p, size_t *used_p, size_t *avail_p)
 {
     struct statvfs buf = {};
@@ -167,6 +199,10 @@ static inline int disk_usage(size_t *size_p, size_t *used_p, size_t *avail_p)
     return 0;
 }
 
+/**
+ * @brief Calculates CPU usage percentage.
+ * @return CPU usage percentage
+ */
 static unsigned cpu_usage()
 {
     int                ret   = 0;
@@ -212,6 +248,10 @@ static unsigned cpu_usage()
     return (double) work / total * 100.0 * sysconf(_SC_NPROCESSORS_CONF);
 }
 
+/**
+ * @brief Checks if there are any core dumps present.
+ * @return True if core dumps are present, false otherwise
+ */
 static bool has_core_dumps()
 {
     DIR *dp = opendir("core");
@@ -231,6 +271,10 @@ static bool has_core_dumps()
     return found;
 }
 
+/**
+ * @brief Unregisters a metric entry by decrementing its value.
+ * @param name Name of the metric entry
+ */
 static inline void metrics_unregister_entry(const char *name)
 {
     neu_metric_entry_t *e = NULL;
@@ -242,6 +286,15 @@ static inline void metrics_unregister_entry(const char *name)
     }
 }
 
+/**
+ * @brief Adds metric entries to the provided list.
+ * @param entries Pointer to the list of metric entries
+ * @param name Name of the metric
+ * @param help Description of the metric
+ * @param type Type of the metric
+ * @param init Initial value for the metric
+ * @return 0 on success, 1 if entry already exists, -1 on failure
+ */
 int neu_metric_entries_add(neu_metric_entry_t **entries, const char *name,
                            const char *help, neu_metric_type_e type,
                            uint64_t init)
@@ -279,6 +332,12 @@ int neu_metric_entries_add(neu_metric_entry_t **entries, const char *name,
     return 0;
 }
 
+/**
+ * @brief Initializes Neuron metrics.
+ *
+ * This function initializes Neuron metrics, including OS information,
+ * memory total bytes, and start timestamp.
+ */
 void neu_metrics_init()
 {
     pthread_rwlock_wrlock(&g_metrics_mtx_);
@@ -290,6 +349,13 @@ void neu_metrics_init()
     pthread_rwlock_unlock(&g_metrics_mtx_);
 }
 
+/**
+ * @brief Adds a node's metrics to the global metrics.
+ *
+ * @param adapter The adapter containing the node's metrics.
+ *
+ * This function adds a node's metrics to the global metrics hash table.
+ */
 void neu_metrics_add_node(const neu_adapter_t *adapter)
 {
     pthread_rwlock_wrlock(&g_metrics_mtx_);
@@ -297,6 +363,13 @@ void neu_metrics_add_node(const neu_adapter_t *adapter)
     pthread_rwlock_unlock(&g_metrics_mtx_);
 }
 
+/**
+ * @brief Removes a node's metrics from the global metrics.
+ *
+ * @param adapter The adapter containing the node's metrics.
+ *
+ * This function removes a node's metrics from the global metrics hash table.
+ */
 void neu_metrics_del_node(const neu_adapter_t *adapter)
 {
     pthread_rwlock_wrlock(&g_metrics_mtx_);
@@ -304,6 +377,18 @@ void neu_metrics_del_node(const neu_adapter_t *adapter)
     pthread_rwlock_unlock(&g_metrics_mtx_);
 }
 
+/**
+ * @brief Registers a new metric entry.
+ *
+ * @param name The name of the metric entry.
+ * @param help The help string for the metric entry.
+ * @param type The type of the metric entry.
+ *
+ * @return 0 on success, -1 on failure.
+ *
+ * This function registers a new metric entry with the provided name, help,
+ * and type.
+ */
 int neu_metrics_register_entry(const char *name, const char *help,
                                neu_metric_type_e type)
 {
@@ -324,6 +409,13 @@ int neu_metrics_register_entry(const char *name, const char *help,
     return rv;
 }
 
+/**
+ * @brief Unregisters a metric entry.
+ *
+ * @param name The name of the metric entry.
+ *
+ * This function unregisters a metric entry with the provided name.
+ */
 void neu_metrics_unregister_entry(const char *name)
 {
     pthread_rwlock_wrlock(&g_metrics_mtx_);
@@ -331,6 +423,16 @@ void neu_metrics_unregister_entry(const char *name)
     pthread_rwlock_unlock(&g_metrics_mtx_);
 }
 
+
+/**
+ * @brief Visits and updates metrics using the provided callback function.
+ *
+ * @param cb The callback function to visit and update metrics.
+ * @param data Additional data to pass to the callback function.
+ *
+ * This function visits and updates various metrics using the provided callback
+ * function and additional data.
+ */
 void neu_metrics_visist(neu_metrics_cb_t cb, void *data)
 {
     unsigned cpu       = cpu_usage();

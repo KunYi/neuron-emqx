@@ -30,6 +30,9 @@ extern "C" {
 #include <stdint.h>
 #include <stdio.h>
 
+/**
+ * @brief Enumeration defining the data types supported by the Neuron system.
+ */
 typedef enum {
     NEU_TYPE_INT8   = 1,
     NEU_TYPE_UINT8  = 2,
@@ -52,6 +55,12 @@ typedef enum {
     NEU_TYPE_PTR    = 19,
 } neu_type_e;
 
+/**
+ * @brief Gets the string representation of a given data type.
+ *
+ * @param type The data type.
+ * @return The string representation of the data type.
+ */
 inline static const char *neu_type_string(neu_type_e type)
 {
     switch (type) {
@@ -98,36 +107,52 @@ inline static const char *neu_type_string(neu_type_e type)
     return "";
 }
 
+/**
+ * @brief Structure representing a pointer value.
+ */
 typedef struct {
-    neu_type_e type; // string or bytes
-    uint16_t   length;
-    uint8_t *  ptr;
+    neu_type_e type;   /**< The data type (string or bytes). */
+    uint16_t   length; /**< The length of the pointed data. */
+    uint8_t *  ptr;    /**< The pointer to the data. */
 } neu_value_ptr_t;
 
-#define NEU_VALUE_SIZE 128
+#define NEU_VALUE_SIZE 128 /**< Size of the neu_value_u union. */
 
+/**
+ * @brief Structure representing bytes value.
+ */
 typedef struct {
-    uint8_t bytes[NEU_VALUE_SIZE];
-    uint8_t length;
+    uint8_t bytes[NEU_VALUE_SIZE]; /**< Byte array. */
+    uint8_t length;                /**< Length of the byte array. */
 } __attribute__((packed)) neu_value_bytes_t;
 
+/**
+ * @brief Union representing various data types.
+ */
 typedef union {
-    bool              boolean;
-    int8_t            i8;
-    uint8_t           u8;
-    int16_t           i16;
-    uint16_t          u16;
-    int32_t           i32;
-    uint32_t          u32;
-    int64_t           i64;
-    uint64_t          u64;
-    float             f32;
-    double            d64;
-    char              str[NEU_VALUE_SIZE];
-    neu_value_bytes_t bytes;
-    neu_value_ptr_t   ptr;
+    bool              boolean; /**< Boolean value. */
+    int8_t            i8;      /**< 8-bit signed integer. */
+    uint8_t           u8;      /**< 8-bit unsigned integer. */
+    int16_t           i16;     /**< 16-bit signed integer. */
+    uint16_t          u16;     /**< 16-bit unsigned integer. */
+    int32_t           i32;     /**< 32-bit signed integer. */
+    uint32_t          u32;     /**< 32-bit unsigned integer. */
+    int64_t           i64;     /**< 64-bit signed integer. */
+    uint64_t          u64;     /**< 64-bit unsigned integer. */
+    float             f32;     /**< Single-precision floating point. */
+    double            d64;     /**< Double-precision floating point. */
+    char              str[NEU_VALUE_SIZE];  /**< String. */
+    neu_value_bytes_t bytes;   /**< Byte array. */
+    neu_value_ptr_t   ptr;     /**< Pointer. */
 } neu_value_u;
 
+/**
+ * @brief Gets the string representation of a given value.
+ *
+ * @param type The data type.
+ * @param value The value.
+ * @return The string representation of the value.
+ */
 static inline char *neu_value_str(neu_type_e type, neu_value_u value)
 {
     static __thread char str[32] = { 0 };

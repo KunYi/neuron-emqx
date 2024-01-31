@@ -36,21 +36,21 @@ typedef enum {
 } neu_attribute_e;
 
 typedef enum {
-    NEU_DATATAG_ENDIAN_L16  = 0, // #L  2,1
-    NEU_DATATAG_ENDIAN_B16  = 1, // #B  1,2
-    NEU_DATATAG_ENDIAN_LL32 = 2, // #LL 4,3,2,1
-    NEU_DATATAG_ENDIAN_LB32 = 3, // #LB 3,4,1,2
-    NEU_DATATAG_ENDIAN_BB32 = 4, // #BB 1,2,3,4
-    NEU_DATATAG_ENDIAN_BL32 = 5, // #BL 2,1,4,3
-    NEU_DATATAG_ENDIAN_L64  = 6, // #L  8,7,6,5,4,3,2,1
-    NEU_DATATAG_ENDIAN_B64  = 7, // #B  1,2,3,4,5,6,7,8
+    NEU_DATATAG_ENDIAN_L16  = 0, ///< #L  2,1
+    NEU_DATATAG_ENDIAN_B16  = 1, ///< #B  1,2
+    NEU_DATATAG_ENDIAN_LL32 = 2, ///< #LL 4,3,2,1
+    NEU_DATATAG_ENDIAN_LB32 = 3, ///< #LB 3,4,1,2
+    NEU_DATATAG_ENDIAN_BB32 = 4, ///< #BB 1,2,3,4
+    NEU_DATATAG_ENDIAN_BL32 = 5, ///< #BL 2,1,4,3
+    NEU_DATATAG_ENDIAN_L64  = 6, ///< #L  8,7,6,5,4,3,2,1
+    NEU_DATATAG_ENDIAN_B64  = 7, ///< #B  1,2,3,4,5,6,7,8
 } neu_datatag_endian_e;
 
 typedef enum {
-    NEU_DATATAG_STRING_TYPE_H = 0, // high-to-low endian
-    NEU_DATATAG_STRING_TYPE_L = 1, // low-to-high endian
-    NEU_DATATAG_STRING_TYPE_D = 2, // a high byte is stored in an int16
-    NEU_DATATAG_STRING_TYPE_E = 3, // a low byte is stored in an int16
+    NEU_DATATAG_STRING_TYPE_H = 0, ///< high-to-low endian
+    NEU_DATATAG_STRING_TYPE_L = 1, ///< low-to-high endian
+    NEU_DATATAG_STRING_TYPE_D = 2, ///< a high byte is stored in an int16
+    NEU_DATATAG_STRING_TYPE_E = 3, ///< a low byte is stored in an int16
 } neu_datatag_string_type_e;
 
 typedef union {

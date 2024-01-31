@@ -26,16 +26,34 @@ config_ **/
 #include "errcodes.h"
 #include "tag.h"
 
+/**
+ * @def GET_STATIC_VALUE_PTR(tag, out)
+ * @brief Macro to retrieve a pointer to the static value stored in the tag.
+ * @param tag The data tag.
+ * @param out Output variable to store the pointer.
+ */
 #define GET_STATIC_VALUE_PTR(tag, out)                      \
     do {                                                    \
         memcpy(&(out), (tag)->meta, sizeof(neu_value_u *)); \
     } while (0)
 
+/**
+ * @def SET_STATIC_VALUE_PTR(tag, ptr)
+ * @brief Macro to set the static value pointer in the tag.
+ * @param tag The data tag.
+ * @param ptr The pointer to be set.
+ */
 #define SET_STATIC_VALUE_PTR(tag, ptr)                      \
     do {                                                    \
         memcpy((tag)->meta, &(ptr), sizeof(neu_value_u *)); \
     } while (0)
 
+/**
+ * @brief Copies data from one data tag to another.
+ *
+ * @param _dst Destination data tag.
+ * @param _src Source data tag.
+ */
 static void tag_array_copy(void *_dst, const void *_src)
 {
     neu_datatag_t *dst = (neu_datatag_t *) _dst;
@@ -64,6 +82,11 @@ static void tag_array_copy(void *_dst, const void *_src)
     }
 }
 
+/**
+ * @brief Frees the memory occupied by a data tag element.
+ *
+ * @param _elt The data tag element to be freed.
+ */
 static void tag_array_free(void *_elt)
 {
     neu_datatag_t *elt = (neu_datatag_t *) _elt;
@@ -80,14 +103,28 @@ static void tag_array_free(void *_elt)
     }
 }
 
+/**
+ * @brief Initializes the UT_icd structure for data tag handling.
+ */
 static UT_icd tag_icd = { sizeof(neu_datatag_t), NULL, tag_array_copy,
                           tag_array_free };
 
+/**
+ * @brief Retrieves the UT_icd structure for data tag handling.
+ *
+ * @return A pointer to the UT_icd structure.
+ */
 UT_icd *neu_tag_get_icd()
 {
     return &tag_icd;
 }
 
+/**
+ * @brief Duplicates a data tag.
+ *
+ * @param tag The data tag to duplicate.
+ * @return A new data tag that is a duplicate of the input tag.
+ */
 neu_datatag_t *neu_tag_dup(const neu_datatag_t *tag)
 {
     neu_datatag_t *new = calloc(1, sizeof(*new));
@@ -95,6 +132,12 @@ neu_datatag_t *neu_tag_dup(const neu_datatag_t *tag)
     return new;
 }
 
+/**
+ * @brief Copies the content of one data tag into another.
+ *
+ * @param tag The destination data tag.
+ * @param other The source data tag.
+ */
 void neu_tag_copy(neu_datatag_t *tag, const neu_datatag_t *other)
 {
     if (tag) {
@@ -103,6 +146,11 @@ void neu_tag_copy(neu_datatag_t *tag, const neu_datatag_t *other)
     }
 }
 
+/**
+ * @brief Finalizes a data tag, freeing any allocated memory.
+ *
+ * @param tag The data tag to be finalized.
+ */
 void neu_tag_fini(neu_datatag_t *tag)
 {
     if (tag) {
@@ -110,6 +158,11 @@ void neu_tag_fini(neu_datatag_t *tag)
     }
 }
 
+/**
+ * @brief Frees the memory occupied by a data tag.
+ *
+ * @param tag The data tag to be freed.
+ */
 void neu_tag_free(neu_datatag_t *tag)
 {
     if (tag) {
@@ -118,6 +171,13 @@ void neu_tag_free(neu_datatag_t *tag)
     }
 }
 
+/**
+ * @brief Find the last occurrence of a character in a string.
+ *
+ * @param str The string to search.
+ * @param character The character to find.
+ * @return A pointer to the last occurrence of the character.
+ */
 static char *find_last_character(char *str, char character)
 {
     char *find = strchr(str, character);
@@ -131,6 +191,13 @@ static char *find_last_character(char *str, char character)
     return ret;
 }
 
+/**
+ * @brief Parses the address option of a data tag and populates the corresponding structure.
+ *
+ * @param datatag The data tag to parse.
+ * @param option Pointer to the structure to store the parsed option.
+ * @return 0 on success, -1 on failure.
+ */
 int neu_datatag_parse_addr_option(const neu_datatag_t *      datatag,
                                   neu_datatag_addr_option_u *option)
 {
@@ -327,6 +394,13 @@ bool neu_datatag_string_is_utf8(char *data, int len)
     return true;
 }
 
+/**
+ * @brief Converts a string byte-order from H to L.
+ *
+ * @param str The input string.
+ * @param len The length of the string.
+ * @return The length of the modified string.
+ */
 int neu_datatag_string_htol(char *str, int len)
 {
 
@@ -340,11 +414,25 @@ int neu_datatag_string_htol(char *str, int len)
     return len;
 }
 
+/**
+ * @brief Converts a string byte-order from L to H
+ *
+ * @param str The input string.
+ * @param len The length of the string.
+ * @return The length of the modified string.
+ */
 int neu_datatag_string_ltoh(char *str, int len)
 {
     return neu_datatag_string_htol(str, len);
 }
 
+/**
+ * @brief Converts a string byte-order from E to D.
+ *
+ * @param str The input string.
+ * @param len The length of the string.
+ * @return The length of the modified string.
+ */
 int neu_datatag_string_etod(char *str, int len)
 {
     for (int i = 0; i < len; i += 2) {
@@ -355,6 +443,13 @@ int neu_datatag_string_etod(char *str, int len)
     return len;
 }
 
+/**
+ * @brief Converts a string byte-order from D to E.
+ *
+ * @param str The input string.
+ * @param len The length of the string.
+ * @return The length of the modified string.
+ */
 int neu_datatag_string_dtoe(char *str, int len)
 {
     for (int i = 0; i < len; i += 2) {
@@ -365,6 +460,13 @@ int neu_datatag_string_dtoe(char *str, int len)
     return len;
 }
 
+/**
+ * @brief Converts a string byte-order from E to H.
+ *
+ * @param str The input string.
+ * @param len The length of the string.
+ * @return The length of the modified string.
+ */
 int neu_datatag_string_etoh(char *str, int len)
 {
     char *t = calloc(len, sizeof(char));
@@ -379,6 +481,13 @@ int neu_datatag_string_etoh(char *str, int len)
     return len / 2;
 }
 
+/**
+ * @brief Converts a string byte-order from D to H.
+ *
+ * @param str The input string.
+ * @param len The length of the string.
+ * @return The length of the modified string.
+ */
 int neu_datatag_string_dtoh(char *str, int len)
 {
     char *t = calloc(len, sizeof(char));
@@ -393,6 +502,13 @@ int neu_datatag_string_dtoh(char *str, int len)
     return len / 2;
 }
 
+/**
+ * @brief Converts a string byte-order from T to D.
+ *
+ * @param str The input string.
+ * @param len The length of the string.
+ * @return The length of the modified string.
+ */
 int neu_datatag_string_tod(char *str, int len, int buf_len)
 {
     assert(len * 2 < len);
@@ -407,6 +523,13 @@ int neu_datatag_string_tod(char *str, int len, int buf_len)
     return len * 2;
 }
 
+/**
+ * @brief Converts a string byte-order from T to E.
+ *
+ * @param str The input string.
+ * @param len The length of the string.
+ * @return The length of the modified string.
+ */
 int neu_datatag_string_toe(char *str, int len, int buf_len)
 {
     assert(len * 2 < len);
@@ -421,6 +544,15 @@ int neu_datatag_string_toe(char *str, int len, int buf_len)
     return len * 2;
 }
 
+/**
+ * @brief Gets the static value from a datatag.
+ *
+ * This function retrieves the static value from the specified datatag.
+ *
+ * @param tag   The datatag from which to get the static value.
+ * @param value Pointer to store the retrieved static value.
+ * @return 0 if successful, -1 if the datatag is not static or if the static value is not set.
+ */
 int neu_tag_get_static_value(const neu_datatag_t *tag, neu_value_u *value)
 {
     neu_value_u *cur = NULL;
@@ -438,6 +570,16 @@ int neu_tag_get_static_value(const neu_datatag_t *tag, neu_value_u *value)
     return 0;
 }
 
+/**
+ * @brief Sets the static value for a datatag.
+ *
+ * This function sets the static value for the specified datatag. If the datatag is not
+ * already static, it will be marked as such.
+ *
+ * @param tag   The datatag for which to set the static value.
+ * @param value Pointer to the static value to be set.
+ * @return 0 if successful, -1 if memory allocation fails or if the datatag is not static.
+ */
 int neu_tag_set_static_value(neu_datatag_t *tag, const neu_value_u *value)
 {
     neu_value_u *cur = NULL;
@@ -460,6 +602,16 @@ int neu_tag_set_static_value(neu_datatag_t *tag, const neu_value_u *value)
     return 0;
 }
 
+/**
+ * @brief Gets the JSON representation of the static value from a datatag.
+ *
+ * This function retrieves the JSON representation of the static value from the specified datatag.
+ *
+ * @param tag The datatag from which to get the static value JSON representation.
+ * @param t   Pointer to store the JSON type of the static value.
+ * @param v   Pointer to store the JSON value union of the static value.
+ * @return 0 if successful, -1 if the datatag is not static or if the static value is not set.
+ */
 int neu_tag_get_static_value_json(neu_datatag_t *tag, neu_json_type_e *t,
                                   neu_json_value_u *v)
 {
@@ -643,6 +795,15 @@ int neu_tag_set_static_value_json(neu_datatag_t *tag, neu_json_type_e t,
     return rv;
 }
 
+/**
+ * @brief Dumps the static value of a datatag to a JSON-formatted string.
+ *
+ * This function converts the static value of the specified datatag into a JSON-formatted string.
+ *
+ * @param tag The datatag from which to dump the static value.
+ * @return A JSON-formatted string representing the static value, or NULL if unsuccessful.
+ *         The caller is responsible for freeing the returned string.
+ */
 char *neu_tag_dump_static_value(const neu_datatag_t *tag)
 {
     json_t *jval = NULL;
@@ -706,6 +867,15 @@ char *neu_tag_dump_static_value(const neu_datatag_t *tag)
     return s;
 }
 
+/**
+ * @brief Loads the static value of a datatag from a JSON-formatted string.
+ *
+ * This function sets the static value of the specified datatag using the provided JSON-formatted string.
+ *
+ * @param tag The datatag to which the static value should be set.
+ * @param s   The JSON-formatted string representing the static value.
+ * @return 0 if successful, -1 if the datatag is not static, the JSON string is invalid, or an error occurs during processing.
+ */
 int neu_tag_load_static_value(neu_datatag_t *tag, const char *s)
 {
     if (!neu_tag_attribute_test(tag, NEU_ATTRIBUTE_STATIC) || !s) {
