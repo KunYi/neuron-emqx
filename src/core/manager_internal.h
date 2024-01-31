@@ -87,6 +87,17 @@ int neu_manager_get_node_info(neu_manager_t *manager, const char *name,
 int neu_manager_add_drivers(neu_manager_t *         manager,
                             neu_req_driver_array_t *req);
 
+/**
+ * @brief Forward a message to a specified node.
+ *
+ * This function forwards a given message to the specified node. It retrieves the
+ * destination address using the manager's node manager, sends the message, and logs
+ * information about the operation.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param header Pointer to the neu_reqresp_head_t structure representing the message header.
+ * @param node Name of the destination node.
+ */
 inline static void forward_msg(neu_manager_t *     manager,
                                neu_reqresp_head_t *header, const char *node)
 {

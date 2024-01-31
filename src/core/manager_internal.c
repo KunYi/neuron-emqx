@@ -49,16 +49,53 @@ int neu_manager_add_plugin(neu_manager_t *manager, const char *library)
     return neu_plugin_manager_add(manager->plugin_manager, library);
 }
 
+/**
+ * @brief Remove a plugin from the specified manager.
+ *
+ * This function is a convenience wrapper for removing a plugin from the plugin manager
+ * associated with the given manager. It delegates the actual plugin removal to
+ * neu_plugin_manager_del.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param plugin Name of the plugin to be removed.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ * @see neu_plugin_manager_del
+ */
 int neu_manager_del_plugin(neu_manager_t *manager, const char *plugin)
 {
     return neu_plugin_manager_del(manager->plugin_manager, plugin);
 }
 
+/**
+ * @brief Get the list of plugins associated with the specified manager.
+ *
+ * This function retrieves the list of plugins managed by the plugin manager
+ * associated with the given manager. It delegates the actual retrieval to
+ * neu_plugin_manager_get.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @return A pointer to UT_array containing plugin names, or NULL on failure.
+ * @see neu_plugin_manager_get
+ */
 UT_array *neu_manager_get_plugins(neu_manager_t *manager)
 {
     return neu_plugin_manager_get(manager->plugin_manager);
 }
 
+/**
+ * @brief Add a node to the specified manager.
+ *
+ * This function adds a node with the specified name, associated plugin, setting,
+ * running state, and load state to the node manager associated with the given manager.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param node_name Name of the node to be added.
+ * @param plugin_name Name of the associated plugin for the node.
+ * @param setting Setting information for the node (can be NULL).
+ * @param state Running state of the node.
+ * @param load Flag indicating whether to load the node.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ */
 int neu_manager_add_node(neu_manager_t *manager, const char *node_name,
                          const char *plugin_name, const char *setting,
                          neu_node_running_state_e state, bool load)
@@ -111,6 +148,16 @@ int neu_manager_add_node(neu_manager_t *manager, const char *node_name,
     return NEU_ERR_SUCCESS;
 }
 
+/**
+ * @brief Remove a node from the specified manager.
+ *
+ * This function removes a node with the specified name from the node manager
+ * associated with the given manager.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param node_name Name of the node to be removed.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ */
 int neu_manager_del_node(neu_manager_t *manager, const char *node_name)
 {
     neu_adapter_t *adapter =
@@ -126,12 +173,36 @@ int neu_manager_del_node(neu_manager_t *manager, const char *node_name)
     return NEU_ERR_SUCCESS;
 }
 
+/**
+ * @brief Get the list of nodes associated with the specified manager.
+ *
+ * This function retrieves the list of nodes managed by the node manager
+ * associated with the given manager. It delegates the actual retrieval to
+ * neu_node_manager_filter.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param type Type of nodes to filter (0 for all types).
+ * @param plugin Name of the associated plugin for filtering (can be NULL).
+ * @param node Name of the node for filtering (can be NULL).
+ * @return A pointer to UT_array containing node names, or NULL on failure.
+ * @see neu_node_manager_filter
+ */
 UT_array *neu_manager_get_nodes(neu_manager_t *manager, int type,
                                 const char *plugin, const char *node)
 {
     return neu_node_manager_filter(manager->node_manager, type, plugin, node);
 }
 
+/**
+ * @brief Update the name of a node associated with the specified manager.
+ *
+ * This function updates the name of a node with the specified name to a new name.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param node Current name of the node to be updated.
+ * @param new_name New name for the node.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ */
 int neu_manager_update_node_name(neu_manager_t *manager, const char *node,
                                  const char *new_name)
 {
@@ -150,6 +221,17 @@ int neu_manager_update_node_name(neu_manager_t *manager, const char *node,
     return ret;
 }
 
+/**
+ * @brief Update the name of a group associated with the specified manager.
+ *
+ * This function updates the name of a group with the specified name to a new name.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param driver Name of the driver to which the group belongs.
+ * @param group Current name of the group to be updated.
+ * @param new_name New name for the group.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ */
 int neu_manager_update_group_name(neu_manager_t *manager, const char *driver,
                                   const char *group, const char *new_name)
 {
@@ -157,6 +239,17 @@ int neu_manager_update_group_name(neu_manager_t *manager, const char *driver,
                                                    driver, group, new_name);
 }
 
+/**
+ * @brief Allocate and create a new plugin instance for the specified plugin.
+ *
+ * This function allocates memory for a new neu_plugin_instance_t structure and
+ * creates an instance of the specified plugin using neu_plugin_manager_create_instance.
+ *
+ * @param plugin_manager Pointer to the neu_plugin_manager_t structure.
+ * @param plugin Name of the plugin for which to create an instance.
+ * @return A pointer to the newly created plugin instance, or NULL on failure.
+ * @see neu_plugin_manager_create_instance
+ */
 static inline neu_plugin_instance_t *
 new_plugin_instance(neu_plugin_manager_t *plugin_manager, const char *plugin)
 {
@@ -173,6 +266,14 @@ new_plugin_instance(neu_plugin_manager_t *plugin_manager, const char *plugin)
     return inst;
 }
 
+/**
+ * @brief Free the resources associated with the specified plugin instance.
+ *
+ * This function releases resources associated with a previously allocated
+ * neu_plugin_instance_t structure, including closing the dynamic library handle.
+ *
+ * @param inst Pointer to the neu_plugin_instance_t structure to be freed.
+ */
 static inline void free_plugin_instance(neu_plugin_instance_t *inst)
 {
     if (inst) {
@@ -181,6 +282,18 @@ static inline void free_plugin_instance(neu_plugin_instance_t *inst)
     }
 }
 
+/**
+ * @brief Get the list of driver groups associated with the specified manager.
+ *
+ * This function retrieves the list of driver groups managed by the node manager
+ * associated with the given manager. It iterates over the drivers, gets their
+ * associated groups, and creates an array of neu_resp_driver_group_info_t containing
+ * information about each driver group.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @return A pointer to UT_array containing information about driver groups,
+ *         or NULL on failure.
+ */
 UT_array *neu_manager_get_driver_group(neu_manager_t *manager)
 {
     UT_array *drivers =
@@ -217,6 +330,22 @@ UT_array *neu_manager_get_driver_group(neu_manager_t *manager)
     return driver_groups;
 }
 
+/**
+ * @brief Subscribe to a driver group with the specified parameters.
+ *
+ * This function subscribes to a driver group with the specified application,
+ * driver, group, and parameters. It retrieves the address of the specified
+ * application and delegates the subscription to neu_subscribe_manager_sub.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param app Name of the subscribing application.
+ * @param driver Name of the driver to subscribe to.
+ * @param group Name of the group to subscribe to.
+ * @param params Additional subscription parameters.
+ * @param app_port Output parameter to store the data port of the subscribing application.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ * @see neu_subscribe_manager_sub
+ */
 static inline int manager_subscribe(neu_manager_t *manager, const char *app,
                                     const char *driver, const char *group,
                                     const char *params)
@@ -241,6 +370,24 @@ static inline int manager_subscribe(neu_manager_t *manager, const char *app,
                                      group, params, addr);
 }
 
+
+/**
+ * @brief Subscribe to a driver group with the specified parameters.
+ *
+ * This function subscribes to a driver group with the specified application,
+ * driver, group, and parameters. It retrieves the data port of the subscribing
+ * application and guards against empty MQTT topic parameters. It then delegates
+ * the subscription to manager_subscribe.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param app Name of the subscribing application.
+ * @param driver Name of the driver to subscribe to.
+ * @param group Name of the group to subscribe to.
+ * @param params Additional subscription parameters.
+ * @param app_port Output parameter to store the data port of the subscribing application.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ * @see manager_subscribe
+ */
 int neu_manager_subscribe(neu_manager_t *manager, const char *app,
                           const char *driver, const char *group,
                           const char *params, uint16_t *app_port)
@@ -272,6 +419,21 @@ int neu_manager_subscribe(neu_manager_t *manager, const char *app,
     return manager_subscribe(manager, app, driver, group, params);
 }
 
+/**
+ * @brief Update subscription parameters for an existing subscription.
+ *
+ * This function updates the parameters for an existing subscription between the
+ * specified application, driver, and group. It delegates the update to
+ * neu_subscribe_manager_update_params.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param app Name of the subscribing application.
+ * @param driver Name of the driver to update the subscription for.
+ * @param group Name of the group to update the subscription for.
+ * @param params Updated subscription parameters.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ * @see neu_subscribe_manager_update_params
+ */
 int neu_manager_update_subscribe(neu_manager_t *manager, const char *app,
                                  const char *driver, const char *group,
                                  const char *params)
@@ -280,6 +442,21 @@ int neu_manager_update_subscribe(neu_manager_t *manager, const char *app,
                                                driver, group, params);
 }
 
+/**
+ * @brief Send a subscription request to an application and a driver.
+ *
+ * This function sends a subscription request to the specified application and
+ * driver with the given group, data port, and parameters. It constructs and sends
+ * NEU_REQ_SUBSCRIBE_GROUP messages to both the application and driver.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param app Name of the subscribing application.
+ * @param driver Name of the driver to subscribe to.
+ * @param group Name of the group to subscribe to.
+ * @param app_port Data port of the subscribing application.
+ * @param params Subscription parameters.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ */
 int neu_manager_send_subscribe(neu_manager_t *manager, const char *app,
                                const char *driver, const char *group,
                                uint16_t app_port, const char *params)
@@ -340,6 +517,19 @@ int neu_manager_send_subscribe(neu_manager_t *manager, const char *app,
     return 0;
 }
 
+/**
+ * @brief Unsubscribe from a driver group.
+ *
+ * This function unsubscribes the specified application from the specified driver group.
+ * It delegates the unsubscription to neu_subscribe_manager_unsub.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param app Name of the subscribing application.
+ * @param driver Name of the driver to unsubscribe from.
+ * @param group Name of the group to unsubscribe from.
+ * @return NEU_ERR_SUCCESS on success, or an error code if the operation fails.
+ * @see neu_subscribe_manager_unsub
+ */
 int neu_manager_unsubscribe(neu_manager_t *manager, const char *app,
                             const char *driver, const char *group)
 {
@@ -347,12 +537,39 @@ int neu_manager_unsubscribe(neu_manager_t *manager, const char *app,
                                        group);
 }
 
+/**
+ * @brief Get the list of subscribed groups for the specified application.
+ *
+ * This function retrieves the list of groups that the specified application is subscribed to.
+ * It delegates the retrieval to neu_subscribe_manager_get.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param app Name of the subscribing application.
+ * @return A pointer to UT_array containing information about subscribed groups,
+ *         or NULL on failure.
+ * @see neu_subscribe_manager_get
+ */
 UT_array *neu_manager_get_sub_group(neu_manager_t *manager, const char *app)
 {
     return neu_subscribe_manager_get(manager->subscribe_manager, app, NULL,
                                      NULL);
 }
 
+/**
+ * @brief Get a deep copy of the list of subscribed groups for the specified application, driver, and group.
+ *
+ * This function retrieves a deep copy of the list of groups that the specified application is subscribed to,
+ * considering the specific driver and group. It delegates the retrieval to neu_subscribe_manager_get
+ * and ensures that the copied parameters are allocated separately.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param app Name of the subscribing application.
+ * @param driver Name of the driver.
+ * @param group Name of the group.
+ * @return A deep copy of the UT_array containing information about subscribed groups,
+ *         or NULL on failure.
+ * @see neu_subscribe_manager_get
+ */
 UT_array *neu_manager_get_sub_group_deep_copy(neu_manager_t *manager,
                                               const char *   app,
                                               const char *   driver,
@@ -374,6 +591,17 @@ UT_array *neu_manager_get_sub_group_deep_copy(neu_manager_t *manager,
     return subs;
 }
 
+/**
+ * @brief Get information about a node managed by the manager.
+ *
+ * This function retrieves information about a node with the specified name managed by the manager.
+ * It looks up the node in the node manager and fills the provided neu_persist_node_info_t structure.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param name Name of the node.
+ * @param info Pointer to the neu_persist_node_info_t structure to fill.
+ * @return 0 on success, or -1 if the node is not found.
+ */
 int neu_manager_get_node_info(neu_manager_t *manager, const char *name,
                               neu_persist_node_info_t *info)
 {
@@ -390,6 +618,16 @@ int neu_manager_get_node_info(neu_manager_t *manager, const char *name,
     return -1;
 }
 
+/**
+ * @brief Delete a node from the manager.
+ *
+ * This function deletes the specified node from the manager, handling various cleanup tasks
+ * such as unsubscribing, forwarding messages, and updating other components.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param node Name of the node to be deleted.
+ * @return 0 on success, or an error code if the operation fails.
+ */
 static int del_node(neu_manager_t *manager, const char *node)
 {
     neu_adapter_t *adapter = neu_node_manager_find(manager->node_manager, node);
@@ -448,6 +686,17 @@ static int del_node(neu_manager_t *manager, const char *node)
     return 0;
 }
 
+/**
+ * @brief Add a driver node to the manager.
+ *
+ * This function adds a driver node to the manager, handling the necessary cleanup
+ * and validation steps. It first attempts to delete any existing node with the same name
+ * to replace it with the new driver node.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param driver Pointer to the neu_req_driver_t structure containing driver information.
+ * @return 0 on success, or an error code if the operation fails.
+ */
 static inline int add_driver(neu_manager_t *manager, neu_req_driver_t *driver)
 {
     int ret = del_node(manager, driver->node);
@@ -480,6 +729,16 @@ static inline int add_driver(neu_manager_t *manager, neu_req_driver_t *driver)
     return resp.error;
 }
 
+/**
+ * @brief Add an array of driver nodes to the manager.
+ *
+ * This function adds an array of driver nodes to the manager, handling the necessary
+ * cleanup and validation steps. It iterates through the array and adds each driver node.
+ *
+ * @param manager Pointer to the neu_manager_t structure.
+ * @param req Pointer to the neu_req_driver_array_t structure containing the array of drivers.
+ * @return 0 on success, or an error code if the operation fails.
+ */
 int neu_manager_add_drivers(neu_manager_t *manager, neu_req_driver_array_t *req)
 {
     int ret = 0;

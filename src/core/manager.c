@@ -71,12 +71,29 @@ static bool  mv_tmp_library_file(neu_plugin_kind_e kind, const char *tmp_path,
                                  const char *library);
 static bool  mv_tmp_schema_file(const char *tmp_path, const char *schema);
 
+/**
+ * @brief Get the next available port number.
+ *
+ * This function returns a unique port number on each call. The port number is
+ * incremented by one each time this function is called.
+ *
+ * @return The next available port number.
+ */
 uint16_t neu_manager_get_port()
 {
     static uint16_t port = 10000;
     return port++;
 }
 
+/**
+ * @brief Create a new neu_manager_t instance.
+ *
+ * This function initializes and returns a new `neu_manager_t` instance. It sets
+ * up the necessary components, such as the event loop, plugin manager, node
+ * manager, and subscribe manager.
+ *
+ * @return A pointer to the newly created `neu_manager_t` instance.
+ */
 neu_manager_t *neu_manager_create()
 {
     int                  rv      = 0;
@@ -164,6 +181,15 @@ neu_manager_t *neu_manager_create()
     return manager;
 }
 
+/**
+ * @brief Destroy a neu_manager_t instance.
+ *
+ * This function cleans up and deallocates the resources associated with a
+ * `neu_manager_t` instance. It sends uninit messages to all nodes, waits for
+ * their acknowledgment, and then frees the memory used by the manager.
+ *
+ * @param manager Pointer to the `neu_manager_t` instance to be destroyed.
+ */
 void neu_manager_destroy(neu_manager_t *manager)
 {
     neu_req_node_init_t uninit = { 0 };
@@ -204,6 +230,483 @@ void neu_manager_destroy(neu_manager_t *manager)
     nlog_notice("manager exit");
 }
 
+static void msg_req_node_init_handler(
+    neu_manager_t       *manager,
+    struct sockaddr_un  *src_addr,
+    neu_msg_t           *msg,
+    void                *arg)
+{
+    neu_req_node_init_t *init = (neu_req_node_init_t *) arg;
+
+    if (0 !=
+        neu_node_manager_update(manager->node_manager, init->node,
+                                    *src_addr)) {
+        nlog_warn("bind node %s to src addr(%s) fail", init->node,
+                &src_addr->sun_path[1]);
+        neu_msg_free(msg);
+        return;
+    }
+
+    if (init->state == NEU_NODE_RUNNING_STATE_RUNNING ||
+        init->state == NEU_NODE_RUNNING_STATE_STOPPED) {
+        neu_adapter_t *adapter =
+            neu_node_manager_find(manager->node_manager, init->node);
+        neu_adapter_start(adapter);
+
+        if (init->state == NEU_NODE_RUNNING_STATE_STOPPED) {
+                neu_adapter_stop(adapter);
+        }
+    }
+
+    nlog_notice("bind node %s to src addr(%s)", init->node,
+                &src_addr->sun_path[1]);
+    neu_msg_free(msg);
+}
+
+static void msg_req_add_plugin_handler(
+    neu_manager_t       *manager,
+    struct sockaddr_un  *src_addr,
+    neu_msg_t           *msg,
+    void                *arg)
+{
+    (void)src_addr;
+    neu_req_add_plugin_t *cmd        = (neu_req_add_plugin_t *) arg;
+    neu_reqresp_head_t   *header     = neu_msg_get_header(msg);
+    neu_resp_error_t      e          = { 0 };
+    neu_plugin_kind_e     kind       = -1;
+    char                  schema[64] = { 0 };
+    char                  buffer[65] = { 0 };
+
+    if (sscanf(cmd->library, "libplugin-%64s.so", buffer) != 1) {
+        nlog_warn("library %s no conform", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_LIBRARY_NAME_NOT_CONFORM;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    if (neu_persister_library_exists(cmd->library)) {
+        nlog_warn("library %s had exited", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_LIBRARY_NAME_CONFLICT;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    char *so_tmp_path = file_save_tmp(cmd->so_file, "so");
+
+    if (so_tmp_path == NULL) {
+        nlog_warn("library %s so file save tmp fail", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_BODY_IS_WRONG;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    neu_plugin_instance_t ins   = { 0 };
+    int                   error = NEU_ERR_SUCCESS;
+
+    if (neu_plugin_manager_create_instance_by_path(
+            manager->plugin_manager, so_tmp_path, &ins, &error)) {
+        char module_name[64] = { 0 };
+        kind                 = ins.module->kind;
+        strncpy(module_name, ins.module->module_name, sizeof(module_name));
+        strncpy(schema, ins.module->schema, sizeof(schema));
+
+        nlog_debug("library %s, module_name %s, schema:%s", cmd->library,
+                    module_name, schema);
+
+        uint32_t major = NEU_GET_VERSION_MAJOR(ins.module->version);
+        uint32_t minor = NEU_GET_VERSION_MINOR(ins.module->version);
+
+        neu_plugin_manager_destroy_instance(manager->plugin_manager, &ins);
+
+        if (NEU_VERSION_MAJOR != major || NEU_VERSION_MINOR != minor) {
+            nlog_warn("library %s plugin version error, major:%d minor:%d",
+                      module_name, major, minor);
+            free(cmd->so_file);
+            free(cmd->schema_file);
+            free(so_tmp_path);
+            header->type = NEU_RESP_ERROR;
+            e.error      = NEU_ERR_LIBRARY_MODULE_VERSION_NOT_MATCH;
+            strcpy(header->receiver, header->sender);
+            reply(manager, header, &e);
+            return;
+        }
+
+        if (neu_plugin_manager_exists(manager->plugin_manager,
+                                      module_name)) {
+            nlog_warn("%s module name had existed", module_name);
+            free(cmd->so_file);
+            free(cmd->schema_file);
+            free(so_tmp_path);
+            header->type = NEU_RESP_ERROR;
+            e.error      = NEU_ERR_LIBRARY_MODULE_ALREADY_EXIST;
+            strcpy(header->receiver, header->sender);
+            reply(manager, header, &e);
+            return;
+        }
+    } else {
+        nlog_warn("library %s so file is not a vaild file", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        free(so_tmp_path);
+        header->type = NEU_RESP_ERROR;
+        e.error      = error;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+    if (kind != NEU_PLUGIN_KIND_CUSTOM && kind != NEU_PLUGIN_KIND_SYSTEM) {
+        nlog_warn("library %s kind no support", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        free(so_tmp_path);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_LIBRARY_MODULE_KIND_NOT_SUPPORT;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+    char *schema_tmp_path = file_save_tmp(cmd->schema_file, "json");
+    if (schema_tmp_path == NULL) {
+        nlog_warn("library %s schema file save tmp fail", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        free(so_tmp_path);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_BODY_IS_WRONG;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+    if (!mv_tmp_library_file(kind, so_tmp_path, cmd->library)) {
+        nlog_warn("library %s mv library tmp file fail", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        free(so_tmp_path);
+        free(schema_tmp_path);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_LIBRARY_ADD_FAIL;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+    if (!mv_tmp_schema_file(schema_tmp_path, schema)) {
+        nlog_warn("library %s schema file save schema fail", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        free(so_tmp_path);
+        free(schema_tmp_path);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_LIBRARY_ADD_FAIL;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    error = neu_manager_add_plugin(manager, cmd->library);
+
+    if (error == NEU_ERR_SUCCESS) {
+        manager_strorage_plugin(manager);
+    }
+
+    free(so_tmp_path);
+    free(cmd->so_file);
+    free(cmd->schema_file);
+    free(schema_tmp_path);
+    header->type = NEU_RESP_ERROR;
+    e.error      = error;
+    strcpy(header->receiver, header->sender);
+    reply(manager, header, &e);
+}
+
+static void msg_req_del_plugin_handler(
+    neu_manager_t       *manager,
+    struct sockaddr_un  *src_addr,
+    neu_msg_t           *msg,
+    void                *arg)
+{
+    (void)src_addr;
+    neu_req_del_plugin_t *cmd       = (neu_req_del_plugin_t *) arg;
+    neu_reqresp_head_t   *header    = neu_msg_get_header(msg);
+    neu_resp_error_t      e         = { 0 };
+    UT_array *nodes = neu_manager_get_nodes(
+        manager, NEU_NA_TYPE_DRIVER | NEU_NA_TYPE_APP, cmd->plugin, "");
+
+    if (nodes != NULL) {
+        if (utarray_len(nodes) > 0) {
+            utarray_free(nodes);
+            header->type = NEU_RESP_ERROR;
+            e.error      = NEU_ERR_LIBRARY_IN_USE;
+            strcpy(header->receiver, header->sender);
+            reply(manager, header, &e);
+            return;
+        }
+        utarray_free(nodes);
+    }
+
+    int error = neu_manager_del_plugin(manager, cmd->plugin);
+    e.error   = error;
+    if (error == NEU_ERR_SUCCESS) {
+        manager_strorage_plugin(manager);
+    }
+    header->type = NEU_RESP_ERROR;
+    strcpy(header->receiver, header->sender);
+    reply(manager, header, &e);
+}
+
+static void msg_req_update_plugin_handler(
+    neu_manager_t       *manager,
+    struct sockaddr_un  *src_addr,
+    neu_msg_t           *msg,
+    void                *arg)
+{
+    (void)src_addr;
+    neu_req_update_plugin_t *cmd    = (neu_req_update_plugin_t *) arg;
+    neu_reqresp_head_t      *header = neu_msg_get_header(msg);
+    neu_resp_error_t         e      = { 0 };
+    neu_plugin_kind_e        kind   = -1;
+    char                     module_name[64] = { 0 };
+    char                     schema[64]      = { 0 };
+    char                     buffer[65]      = { 0 };
+
+    if (sscanf(cmd->library, "libplugin-%64s.so", buffer) != 1) {
+        nlog_warn("library %s no conform", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_LIBRARY_NAME_NOT_CONFORM;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    if (!neu_persister_library_exists(cmd->library)) {
+        nlog_warn("library %s no exited", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_LIBRARY_NOT_FOUND;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    char *so_tmp_path = file_save_tmp(cmd->so_file, "so");
+
+    if (so_tmp_path == NULL) {
+        nlog_warn("library %s so file save tmp fail", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_BODY_IS_WRONG;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    neu_plugin_instance_t ins   = { 0 };
+    int                   error = NEU_ERR_SUCCESS;
+
+    if (neu_plugin_manager_create_instance_by_path(
+            manager->plugin_manager, so_tmp_path, &ins, &error)) {
+        kind = ins.module->kind;
+        strncpy(module_name, ins.module->module_name, sizeof(module_name));
+        strncpy(schema, ins.module->schema, sizeof(schema));
+
+        nlog_debug("library %s, module_name %s, schema:%s", cmd->library,
+                   module_name, schema);
+
+        uint32_t major = NEU_GET_VERSION_MAJOR(ins.module->version);
+        uint32_t minor = NEU_GET_VERSION_MINOR(ins.module->version);
+
+        neu_plugin_manager_destroy_instance(manager->plugin_manager, &ins);
+
+        if (NEU_VERSION_MAJOR != major || NEU_VERSION_MINOR != minor) {
+            nlog_warn("library %s plugin version error, major:%d minor:%d",
+                      module_name, major, minor);
+            free(cmd->so_file);
+            free(cmd->schema_file);
+            free(so_tmp_path);
+            header->type = NEU_RESP_ERROR;
+            e.error      = NEU_ERR_LIBRARY_MODULE_VERSION_NOT_MATCH;
+            strcpy(header->receiver, header->sender);
+            reply(manager, header, &e);
+            return;
+        }
+
+        if (!neu_plugin_manager_create_instance_by_lib_name(
+                manager->plugin_manager, cmd->library, &ins)) {
+            nlog_warn("library %s not instance", cmd->library);
+            free(cmd->so_file);
+            free(cmd->schema_file);
+            free(so_tmp_path);
+            header->type = NEU_RESP_ERROR;
+            e.error      = NEU_ERR_LIBRARY_UPDATE_FAIL;
+            strcpy(header->receiver, header->sender);
+            reply(manager, header, &e);
+            return;
+        }
+
+        if (strcmp(module_name, ins.module->module_name) != 0) {
+            nlog_warn("library %s module name mismatch!", cmd->library);
+            neu_plugin_manager_destroy_instance(manager->plugin_manager,
+                                                &ins);
+            free(cmd->so_file);
+            free(cmd->schema_file);
+            free(so_tmp_path);
+            header->type = NEU_RESP_ERROR;
+            e.error      = NEU_ERR_LIBRARY_UPDATE_FAIL;
+            strcpy(header->receiver, header->sender);
+            reply(manager, header, &e);
+            return;
+        }
+
+        neu_plugin_manager_destroy_instance(manager->plugin_manager, &ins);
+
+        if (!neu_plugin_manager_exists(manager->plugin_manager,
+                                       module_name)) {
+            nlog_warn("library %s plugin name no existed", module_name);
+            free(cmd->so_file);
+            free(cmd->schema_file);
+            free(so_tmp_path);
+            header->type = NEU_RESP_ERROR;
+            e.error      = NEU_ERR_LIBRARY_MODULE_NOT_EXISTS;
+            strcpy(header->receiver, header->sender);
+            reply(manager, header, &e);
+            return;
+        }
+    } else {
+        nlog_warn("library %s so file is not a vaild file", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        free(so_tmp_path);
+        header->type = NEU_RESP_ERROR;
+        e.error      = error;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    if (kind != NEU_PLUGIN_KIND_CUSTOM && kind != NEU_PLUGIN_KIND_SYSTEM) {
+        nlog_warn("library %s kind no support", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        free(so_tmp_path);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_LIBRARY_MODULE_KIND_NOT_SUPPORT;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    char *schema_tmp_path = file_save_tmp(cmd->schema_file, "json");
+
+    if (schema_tmp_path == NULL) {
+        nlog_warn("library %s schema file save tmp fail", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        free(so_tmp_path);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_BODY_IS_WRONG;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    UT_array *nodes = neu_manager_get_nodes(
+        manager, NEU_NA_TYPE_DRIVER | NEU_NA_TYPE_APP, module_name, "");
+
+    if (nodes != NULL) {
+        if (utarray_len(nodes) > 0) {
+            utarray_free(nodes);
+            free(cmd->so_file);
+            free(cmd->schema_file);
+            free(so_tmp_path);
+            free(schema_tmp_path);
+            nlog_warn("library %s is using", cmd->library);
+            header->type = NEU_RESP_ERROR;
+            e.error      = NEU_ERR_LIBRARY_IN_USE;
+            strcpy(header->receiver, header->sender);
+            reply(manager, header, &e);
+            return;
+        }
+        utarray_free(nodes);
+    }
+
+    if (!neu_plugin_manager_remove_library(manager->plugin_manager,
+                                           cmd->library)) {
+        nlog_warn("library %s src file remove fail", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        free(so_tmp_path);
+        free(schema_tmp_path);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_LIBRARY_UPDATE_FAIL;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+    if (!mv_tmp_library_file(kind, so_tmp_path, cmd->library)) {
+        nlog_warn("library %s mv library tmp file fail", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        free(so_tmp_path);
+        free(schema_tmp_path);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_LIBRARY_UPDATE_FAIL;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    if (!mv_tmp_schema_file(schema_tmp_path, schema)) {
+        nlog_warn("library %s schema file save schema fail", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        free(so_tmp_path);
+        free(schema_tmp_path);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_LIBRARY_UPDATE_FAIL;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    if (neu_plugin_manager_update(manager->plugin_manager, cmd->library) !=
+        NEU_ERR_SUCCESS) {
+        nlog_warn("update library %s fail", cmd->library);
+        free(cmd->so_file);
+        free(cmd->schema_file);
+        free(so_tmp_path);
+        free(schema_tmp_path);
+        header->type = NEU_RESP_ERROR;
+        e.error      = NEU_ERR_LIBRARY_UPDATE_FAIL;
+        strcpy(header->receiver, header->sender);
+        reply(manager, header, &e);
+        return;
+    }
+
+    free(cmd->so_file);
+    free(cmd->schema_file);
+    free(so_tmp_path);
+    free(schema_tmp_path);
+    header->type = NEU_RESP_ERROR;
+    e.error      = NEU_ERR_SUCCESS;
+    strcpy(header->receiver, header->sender);
+    reply(manager, header, &e);
+}
+
 static int manager_loop(enum neu_event_io_type type, int fd, void *usr_data)
 {
     int                 rv       = 0;
@@ -228,470 +731,18 @@ static int manager_loop(enum neu_event_io_type type, int fd, void *usr_data)
     nlog_info("manager recv msg from: %s to %s, type: %s", header->sender,
               header->receiver, neu_reqresp_type_string(header->type));
     switch (header->type) {
-    case NEU_REQ_NODE_INIT: {
-        neu_req_node_init_t *init = (neu_req_node_init_t *) &header[1];
-
-        if (0 !=
-            neu_node_manager_update(manager->node_manager, init->node,
-                                    src_addr)) {
-            nlog_warn("bind node %s to src addr(%s) fail", init->node,
-                      &src_addr.sun_path[1]);
-            neu_msg_free(msg);
-            break;
-        }
-
-        if (init->state == NEU_NODE_RUNNING_STATE_RUNNING ||
-            init->state == NEU_NODE_RUNNING_STATE_STOPPED) {
-            neu_adapter_t *adapter =
-                neu_node_manager_find(manager->node_manager, init->node);
-            neu_adapter_start(adapter);
-            if (init->state == NEU_NODE_RUNNING_STATE_STOPPED) {
-                neu_adapter_stop(adapter);
-            }
-        }
-
-        nlog_notice("bind node %s to src addr(%s)", init->node,
-                    &src_addr.sun_path[1]);
-        neu_msg_free(msg);
+    case NEU_REQ_NODE_INIT:
+        msg_req_node_init_handler(manager, &src_addr, msg, &header[1]);
         break;
-    }
-    case NEU_REQ_ADD_PLUGIN: {
-        neu_req_add_plugin_t *cmd        = (neu_req_add_plugin_t *) &header[1];
-        neu_resp_error_t      e          = { 0 };
-        neu_plugin_kind_e     kind       = -1;
-        char                  schema[64] = { 0 };
-        char                  buffer[65] = { 0 };
-
-        if (sscanf(cmd->library, "libplugin-%64s.so", buffer) != 1) {
-            nlog_warn("library %s no conform", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_LIBRARY_NAME_NOT_CONFORM;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        if (neu_persister_library_exists(cmd->library)) {
-            nlog_warn("library %s had exited", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_LIBRARY_NAME_CONFLICT;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        char *so_tmp_path = file_save_tmp(cmd->so_file, "so");
-
-        if (so_tmp_path == NULL) {
-            nlog_warn("library %s so file save tmp fail", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_BODY_IS_WRONG;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        neu_plugin_instance_t ins   = { 0 };
-        int                   error = NEU_ERR_SUCCESS;
-
-        if (neu_plugin_manager_create_instance_by_path(
-                manager->plugin_manager, so_tmp_path, &ins, &error)) {
-            char module_name[64] = { 0 };
-            kind                 = ins.module->kind;
-            strncpy(module_name, ins.module->module_name, sizeof(module_name));
-            strncpy(schema, ins.module->schema, sizeof(schema));
-
-            nlog_debug("library %s, module_name %s, schema:%s", cmd->library,
-                       module_name, schema);
-
-            uint32_t major = NEU_GET_VERSION_MAJOR(ins.module->version);
-            uint32_t minor = NEU_GET_VERSION_MINOR(ins.module->version);
-
-            neu_plugin_manager_destroy_instance(manager->plugin_manager, &ins);
-
-            if (NEU_VERSION_MAJOR != major || NEU_VERSION_MINOR != minor) {
-                nlog_warn("library %s plugin version error, major:%d minor:%d",
-                          module_name, major, minor);
-                free(cmd->so_file);
-                free(cmd->schema_file);
-                free(so_tmp_path);
-                header->type = NEU_RESP_ERROR;
-                e.error      = NEU_ERR_LIBRARY_MODULE_VERSION_NOT_MATCH;
-                strcpy(header->receiver, header->sender);
-                reply(manager, header, &e);
-                break;
-            }
-
-            if (neu_plugin_manager_exists(manager->plugin_manager,
-                                          module_name)) {
-
-                nlog_warn("%s module name had existed", module_name);
-                free(cmd->so_file);
-                free(cmd->schema_file);
-                free(so_tmp_path);
-                header->type = NEU_RESP_ERROR;
-                e.error      = NEU_ERR_LIBRARY_MODULE_ALREADY_EXIST;
-                strcpy(header->receiver, header->sender);
-                reply(manager, header, &e);
-                break;
-            }
-
-        } else {
-            nlog_warn("library %s so file is not a vaild file", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            free(so_tmp_path);
-            header->type = NEU_RESP_ERROR;
-            e.error      = error;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        if (kind != NEU_PLUGIN_KIND_CUSTOM && kind != NEU_PLUGIN_KIND_SYSTEM) {
-            nlog_warn("library %s kind no support", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            free(so_tmp_path);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_LIBRARY_MODULE_KIND_NOT_SUPPORT;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        char *schema_tmp_path = file_save_tmp(cmd->schema_file, "json");
-
-        if (schema_tmp_path == NULL) {
-            nlog_warn("library %s schema file save tmp fail", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            free(so_tmp_path);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_BODY_IS_WRONG;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        if (!mv_tmp_library_file(kind, so_tmp_path, cmd->library)) {
-            nlog_warn("library %s mv library tmp file fail", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            free(so_tmp_path);
-            free(schema_tmp_path);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_LIBRARY_ADD_FAIL;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        if (!mv_tmp_schema_file(schema_tmp_path, schema)) {
-            nlog_warn("library %s schema file save schema fail", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            free(so_tmp_path);
-            free(schema_tmp_path);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_LIBRARY_ADD_FAIL;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        error = neu_manager_add_plugin(manager, cmd->library);
-
-        if (error == NEU_ERR_SUCCESS) {
-            manager_strorage_plugin(manager);
-        }
-
-        free(so_tmp_path);
-        free(cmd->so_file);
-        free(cmd->schema_file);
-        free(schema_tmp_path);
-        header->type = NEU_RESP_ERROR;
-        e.error      = error;
-        strcpy(header->receiver, header->sender);
-        reply(manager, header, &e);
+    case NEU_REQ_ADD_PLUGIN:
+        msg_req_add_plugin_handler(manager, &src_addr, msg, &header[1]);
         break;
-    }
-    case NEU_REQ_DEL_PLUGIN: {
-        neu_req_del_plugin_t *cmd = (neu_req_del_plugin_t *) &header[1];
-        neu_resp_error_t      e   = { 0 };
-
-        UT_array *nodes = neu_manager_get_nodes(
-            manager, NEU_NA_TYPE_DRIVER | NEU_NA_TYPE_APP, cmd->plugin, "");
-
-        if (nodes != NULL) {
-            if (utarray_len(nodes) > 0) {
-                utarray_free(nodes);
-                header->type = NEU_RESP_ERROR;
-                e.error      = NEU_ERR_LIBRARY_IN_USE;
-                strcpy(header->receiver, header->sender);
-                reply(manager, header, &e);
-                break;
-            }
-            utarray_free(nodes);
-        }
-
-        int error = neu_manager_del_plugin(manager, cmd->plugin);
-        e.error   = error;
-
-        if (error == NEU_ERR_SUCCESS) {
-            manager_strorage_plugin(manager);
-        }
-
-        header->type = NEU_RESP_ERROR;
-        strcpy(header->receiver, header->sender);
-        reply(manager, header, &e);
+    case NEU_REQ_DEL_PLUGIN:
+        msg_req_del_plugin_handler(manager, &src_addr, msg, &header[1]);
         break;
-    }
-    case NEU_REQ_UPDATE_PLUGIN: {
-        neu_req_update_plugin_t *cmd  = (neu_req_update_plugin_t *) &header[1];
-        neu_resp_error_t         e    = { 0 };
-        neu_plugin_kind_e        kind = -1;
-        char                     module_name[64] = { 0 };
-        char                     schema[64]      = { 0 };
-        char                     buffer[65]      = { 0 };
-
-        if (sscanf(cmd->library, "libplugin-%64s.so", buffer) != 1) {
-            nlog_warn("library %s no conform", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_LIBRARY_NAME_NOT_CONFORM;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        if (!neu_persister_library_exists(cmd->library)) {
-            nlog_warn("library %s no exited", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_LIBRARY_NOT_FOUND;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        char *so_tmp_path = file_save_tmp(cmd->so_file, "so");
-
-        if (so_tmp_path == NULL) {
-            nlog_warn("library %s so file save tmp fail", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_BODY_IS_WRONG;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        neu_plugin_instance_t ins   = { 0 };
-        int                   error = NEU_ERR_SUCCESS;
-
-        if (neu_plugin_manager_create_instance_by_path(
-                manager->plugin_manager, so_tmp_path, &ins, &error)) {
-            kind = ins.module->kind;
-            strncpy(module_name, ins.module->module_name, sizeof(module_name));
-            strncpy(schema, ins.module->schema, sizeof(schema));
-
-            nlog_debug("library %s, module_name %s, schema:%s", cmd->library,
-                       module_name, schema);
-
-            uint32_t major = NEU_GET_VERSION_MAJOR(ins.module->version);
-            uint32_t minor = NEU_GET_VERSION_MINOR(ins.module->version);
-
-            neu_plugin_manager_destroy_instance(manager->plugin_manager, &ins);
-
-            if (NEU_VERSION_MAJOR != major || NEU_VERSION_MINOR != minor) {
-                nlog_warn("library %s plugin version error, major:%d minor:%d",
-                          module_name, major, minor);
-                free(cmd->so_file);
-                free(cmd->schema_file);
-                free(so_tmp_path);
-                header->type = NEU_RESP_ERROR;
-                e.error      = NEU_ERR_LIBRARY_MODULE_VERSION_NOT_MATCH;
-                strcpy(header->receiver, header->sender);
-                reply(manager, header, &e);
-                break;
-            }
-
-            if (!neu_plugin_manager_create_instance_by_lib_name(
-                    manager->plugin_manager, cmd->library, &ins)) {
-                nlog_warn("library %s not instance", cmd->library);
-                free(cmd->so_file);
-                free(cmd->schema_file);
-                free(so_tmp_path);
-                header->type = NEU_RESP_ERROR;
-                e.error      = NEU_ERR_LIBRARY_UPDATE_FAIL;
-                strcpy(header->receiver, header->sender);
-                reply(manager, header, &e);
-                break;
-            }
-
-            if (strcmp(module_name, ins.module->module_name) != 0) {
-                nlog_warn("library %s module name mismatch!", cmd->library);
-                neu_plugin_manager_destroy_instance(manager->plugin_manager,
-                                                    &ins);
-                free(cmd->so_file);
-                free(cmd->schema_file);
-                free(so_tmp_path);
-                header->type = NEU_RESP_ERROR;
-                e.error      = NEU_ERR_LIBRARY_UPDATE_FAIL;
-                strcpy(header->receiver, header->sender);
-                reply(manager, header, &e);
-                break;
-            }
-
-            neu_plugin_manager_destroy_instance(manager->plugin_manager, &ins);
-
-            if (!neu_plugin_manager_exists(manager->plugin_manager,
-                                           module_name)) {
-
-                nlog_warn("library %s plugin name no existed", module_name);
-                free(cmd->so_file);
-                free(cmd->schema_file);
-                free(so_tmp_path);
-                header->type = NEU_RESP_ERROR;
-                e.error      = NEU_ERR_LIBRARY_MODULE_NOT_EXISTS;
-                strcpy(header->receiver, header->sender);
-                reply(manager, header, &e);
-                break;
-            }
-
-        } else {
-            nlog_warn("library %s so file is not a vaild file", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            free(so_tmp_path);
-            header->type = NEU_RESP_ERROR;
-            e.error      = error;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        if (kind != NEU_PLUGIN_KIND_CUSTOM && kind != NEU_PLUGIN_KIND_SYSTEM) {
-            nlog_warn("library %s kind no support", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            free(so_tmp_path);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_LIBRARY_MODULE_KIND_NOT_SUPPORT;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        char *schema_tmp_path = file_save_tmp(cmd->schema_file, "json");
-
-        if (schema_tmp_path == NULL) {
-            nlog_warn("library %s schema file save tmp fail", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            free(so_tmp_path);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_BODY_IS_WRONG;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        UT_array *nodes = neu_manager_get_nodes(
-            manager, NEU_NA_TYPE_DRIVER | NEU_NA_TYPE_APP, module_name, "");
-
-        if (nodes != NULL) {
-            if (utarray_len(nodes) > 0) {
-                utarray_free(nodes);
-                free(cmd->so_file);
-                free(cmd->schema_file);
-                free(so_tmp_path);
-                free(schema_tmp_path);
-                nlog_warn("library %s is using", cmd->library);
-                header->type = NEU_RESP_ERROR;
-                e.error      = NEU_ERR_LIBRARY_IN_USE;
-                strcpy(header->receiver, header->sender);
-                reply(manager, header, &e);
-                break;
-            }
-            utarray_free(nodes);
-        }
-
-        if (!neu_plugin_manager_remove_library(manager->plugin_manager,
-                                               cmd->library)) {
-            nlog_warn("library %s src file remove fail", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            free(so_tmp_path);
-            free(schema_tmp_path);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_LIBRARY_UPDATE_FAIL;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        if (!mv_tmp_library_file(kind, so_tmp_path, cmd->library)) {
-            nlog_warn("library %s mv library tmp file fail", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            free(so_tmp_path);
-            free(schema_tmp_path);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_LIBRARY_UPDATE_FAIL;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        if (!mv_tmp_schema_file(schema_tmp_path, schema)) {
-            nlog_warn("library %s schema file save schema fail", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            free(so_tmp_path);
-            free(schema_tmp_path);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_LIBRARY_UPDATE_FAIL;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        if (neu_plugin_manager_update(manager->plugin_manager, cmd->library) !=
-            NEU_ERR_SUCCESS) {
-            nlog_warn("update library %s fail", cmd->library);
-            free(cmd->so_file);
-            free(cmd->schema_file);
-            free(so_tmp_path);
-            free(schema_tmp_path);
-            header->type = NEU_RESP_ERROR;
-            e.error      = NEU_ERR_LIBRARY_UPDATE_FAIL;
-            strcpy(header->receiver, header->sender);
-            reply(manager, header, &e);
-            break;
-        }
-
-        free(cmd->so_file);
-        free(cmd->schema_file);
-        free(so_tmp_path);
-        free(schema_tmp_path);
-        header->type = NEU_RESP_ERROR;
-        e.error      = NEU_ERR_SUCCESS;
-        strcpy(header->receiver, header->sender);
-        reply(manager, header, &e);
-
+    case NEU_REQ_UPDATE_PLUGIN:
+        msg_req_update_plugin_handler(manager, &src_addr, msg, &header[1]);
         break;
-    }
     case NEU_REQ_GET_PLUGIN: {
         UT_array *            plugins = neu_manager_get_plugins(manager);
         neu_resp_get_plugin_t resp    = { .plugins = plugins };
