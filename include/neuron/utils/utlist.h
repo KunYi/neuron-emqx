@@ -709,7 +709,7 @@ do {                                                                            
   assert((del)->prev != NULL);                                                                 \
   if ((del)->prev == (del)) {                                                                  \
       (head)=NULL;                                                                             \
-  } else if ((del)==(head)) {
+  } else if ((del)==(head)) {                                                                  \
       assert((del)->next != NULL);                                                             \
       (del)->next->prev = (del)->prev;                                                         \
       (head) = (del)->next;                                                                    \
