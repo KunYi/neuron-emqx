@@ -90,8 +90,8 @@ set(NEURON_BASE_SOURCES
     src/utils/async_queue.c
     src/utils/log.c
     ${PERSIST_SOURCES})
-  
-if (SMART_LINK) 
+
+if (SMART_LINK)
   message(STATUS "using smart link")
   add_definitions(-DNEU_SMART_LINK)
   set(NEURON_BASE_SOURCES ${NEURON_BASE_SOURCES} src/connection/smart_link.c)
@@ -104,7 +104,7 @@ endif()
 
 
 add_library(neuron-base SHARED)
-target_sources(neuron-base PRIVATE ${NEURON_BASE_SOURCES} ${NEURON_SRC_PARSE}) 
+target_sources(neuron-base PRIVATE ${NEURON_BASE_SOURCES} ${NEURON_SRC_PARSE})
 target_include_directories(neuron-base
                            PRIVATE include/neuron src)
 target_link_libraries(neuron-base libssl.a libcrypto.a)
@@ -147,7 +147,7 @@ set(NEURON_SOURCES
 
 set(CMAKE_BUILD_RPATH ./)
 add_executable(neuron)
-target_sources(neuron PRIVATE ${NEURON_SOURCES}) 
+target_sources(neuron PRIVATE ${NEURON_SOURCES})
 target_include_directories(neuron PRIVATE include/neuron src plugins)
 target_link_libraries(neuron dl neuron-base sqlite3 -lm)
 target_link_options(neuron PRIVATE "LINKER:--dynamic-list-data")
@@ -182,7 +182,7 @@ add_subdirectory(tests/plugins/sc1)
 include(GNUInstallDirs)
 if(UNIX)
 	mark_as_advanced(CLEAR
-	    CMAKE_INSTALL_BINDIR
+		CMAKE_INSTALL_BINDIR
 		CMAKE_INSTALL_INCLUDEDIR
 		CMAKE_INSTALL_LIBDIR
 		CMAKE_INSTALL_SYSCONFDIR)
