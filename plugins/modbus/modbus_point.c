@@ -35,6 +35,19 @@ static int  tag_cmp_write(neu_tag_sort_elem_t *tag1, neu_tag_sort_elem_t *tag2);
 static bool tag_sort_write(neu_tag_sort_t *sort, void *tag,
                            void *tag_to_be_sorted);
 
+/**
+ * @brief Converts a Neuron data tag to a Modbus point configuration.
+ *
+ * This function converts the information in a Neuron data tag to a Modbus point configuration.
+ * It parses the address option, slave ID, area, start address, data type, and other relevant information
+ * from the Neuron data tag and fills in the corresponding fields in the Modbus point structure.
+ *
+ * @param tag   The Neuron data tag to be converted.
+ * @param point The Modbus point configuration structure to be filled.
+ * @return      Returns an integer representing the success or failure of the conversion.
+ *              NEU_ERR_SUCCESS if the conversion is successful.
+ *              Appropriate error codes are returned for different failure scenarios.
+ */
 int modbus_tag_to_point(const neu_datatag_t *tag, modbus_point_t *point)
 {
     int      ret           = NEU_ERR_SUCCESS;
@@ -184,6 +197,19 @@ int modbus_tag_to_point(const neu_datatag_t *tag, modbus_point_t *point)
     return ret;
 }
 
+/**
+ * @brief Converts a Neuron tag value to a Modbus write point configuration.
+ *
+ * This function converts the information in a Neuron tag value to a Modbus write point configuration.
+ * It uses the modbus_tag_to_point function to obtain the Modbus point configuration and assigns the
+ * tag value to the write point structure.
+ *
+ * @param tag   The Neuron tag value to be converted.
+ * @param point The Modbus write point configuration structure to be filled.
+ * @return      Returns an integer representing the success or failure of the conversion.
+ *              NEU_ERR_SUCCESS if the conversion is successful.
+ *              Appropriate error codes are returned for different failure scenarios.
+ */
 int modbus_write_tag_to_point(const neu_plugin_tag_value_t *tag,
                               modbus_point_write_t *        point)
 {
@@ -193,6 +219,16 @@ int modbus_write_tag_to_point(const neu_plugin_tag_value_t *tag,
     return ret;
 }
 
+/**
+ * @brief Sorts and organizes Neuron tags for efficient Modbus read operations.
+ *
+ * This function takes a UT_array of Neuron tags and sorts them based on the Modbus configuration
+ * to optimize the read operation. It returns a structure containing the sorted Modbus read commands.
+ *
+ * @param tags      The UT_array of Neuron tags to be sorted.
+ * @param max_byte  The maximum number of bytes to be read in a single Modbus read command.
+ * @return          Returns a pointer to the sorted Modbus read commands structure.
+ */
 modbus_read_cmd_sort_t *modbus_tag_sort(UT_array *tags, uint16_t max_byte)
 {
     modbus_read_max_byte          = max_byte;
@@ -221,6 +257,18 @@ modbus_read_cmd_sort_t *modbus_tag_sort(UT_array *tags, uint16_t max_byte)
     return sort_result;
 }
 
+/**
+ * @brief Calculates the number of bytes required to represent a Neuron value based on its type.
+ *
+ * This function calculates the number of bytes needed to represent a Neuron value of a given type.
+ * The calculation takes into account the byte order conversion for integer and floating-point types.
+ * For string types, the length of the string is considered.
+ *
+ * @param type   The Neuron data type of the value.
+ * @param value  The Neuron value to be represented.
+ * @param option The addressing option for string types, including length and type information.
+ * @return       Returns the number of bytes required to represent the Neuron value.
+ */
 int cal_n_byte(int type, neu_value_u *value, neu_datatag_addr_option_u option)
 {
     int n = 0;
@@ -273,6 +321,16 @@ int cal_n_byte(int type, neu_value_u *value, neu_datatag_addr_option_u option)
     return n;
 }
 
+/**
+ * @brief Sorts and organizes Modbus write commands based on tag information.
+ *
+ * This function takes an array of Modbus write tags, sorts them based on Modbus address information,
+ * and organizes them into write commands with the required data for Modbus communication. It allocates
+ * memory to store the sorted commands and their associated data.
+ *
+ * @param tags The array of Modbus write tags to be sorted.
+ * @return     Returns a pointer to a structure containing the sorted Modbus write commands and their data.
+ */
 modbus_write_cmd_sort_t *modbus_write_tags_sort(UT_array *tags)
 {
     neu_tag_sort_result_t *result =
@@ -331,6 +389,14 @@ modbus_write_cmd_sort_t *modbus_write_tags_sort(UT_array *tags)
     return sort_result;
 }
 
+/**
+ * @brief Frees the memory allocated for the sorted Modbus read commands and their associated data.
+ *
+ * This function frees the memory allocated for the sorted Modbus read commands and their associated data,
+ * including the tags within each command and the command array itself.
+ *
+ * @param cs The structure containing the sorted Modbus read commands and their data.
+ */
 void modbus_tag_sort_free(modbus_read_cmd_sort_t *cs)
 {
     for (uint16_t i = 0; i < cs->n_cmd; i++) {
@@ -341,6 +407,17 @@ void modbus_tag_sort_free(modbus_read_cmd_sort_t *cs)
     free(cs);
 }
 
+/**
+ * @brief Compares two Modbus tags for sorting purposes.
+ *
+ * This function is used as a comparison function to determine the order of Modbus tags when sorting.
+ * It compares tags based on their Modbus slave ID, area, start address, and the number of registers.
+ *
+ * @param tag1 Pointer to the first Modbus tag.
+ * @param tag2 Pointer to the second Modbus tag.
+ * @return     Returns an integer less than, equal to, or greater than zero if the first tag is considered
+ *             to be respectively less than, equal to, or greater than the second tag.
+ */
 static int tag_cmp(neu_tag_sort_elem_t *tag1, neu_tag_sort_elem_t *tag2)
 {
     modbus_point_t *p_t1 = (modbus_point_t *) tag1->tag;
@@ -373,6 +450,18 @@ static int tag_cmp(neu_tag_sort_elem_t *tag1, neu_tag_sort_elem_t *tag2)
     return 0;
 }
 
+/**
+ * @brief Sorting function for Modbus tags.
+ *
+ * This function is used as the sorting function for Modbus tags. It compares two Modbus tags and determines
+ * their order based on Modbus slave ID, area, start address, and the number of registers. Additionally, it
+ * handles the context for sorting and checks for overlapping Modbus addresses.
+ *
+ * @param sort                The Modbus tag sorting structure.
+ * @param tag                 The Modbus tag to be compared.
+ * @param tag_to_be_sorted    The Modbus tag to be compared with.
+ * @return                   Returns true if the tags should be sorted, false otherwise.
+ */
 static bool tag_sort(neu_tag_sort_t *sort, void *tag, void *tag_to_be_sorted)
 {
     modbus_point_t *        t1  = (modbus_point_t *) tag;
@@ -427,6 +516,17 @@ static bool tag_sort(neu_tag_sort_t *sort, void *tag, void *tag_to_be_sorted)
     return true;
 }
 
+/**
+ * @brief Comparison function for sorting Modbus write tags.
+ *
+ * This function is used as the comparison function for sorting Modbus write tags. It compares two Modbus write tags
+ * and determines their order based on Modbus slave ID, area, start address, and the number of registers.
+ *
+ * @param tag1 Pointer to the first Modbus write tag.
+ * @param tag2 Pointer to the second Modbus write tag.
+ * @return     Returns an integer less than, equal to, or greater than zero if the first tag is considered
+ *             to be respectively less than, equal to, or greater than the second tag.
+ */
 static int tag_cmp_write(neu_tag_sort_elem_t *tag1, neu_tag_sort_elem_t *tag2)
 {
     modbus_point_write_t *p_t1 = (modbus_point_write_t *) tag1->tag;
@@ -459,6 +559,18 @@ static int tag_cmp_write(neu_tag_sort_elem_t *tag1, neu_tag_sort_elem_t *tag2)
     return 0;
 }
 
+/**
+ * @brief Sorting function for Modbus write tags.
+ *
+ * This function is used as the sorting function for Modbus write tags. It compares two Modbus write tags and
+ * determines their order based on Modbus slave ID, area, start address, and the number of registers. Additionally,
+ * it handles the context for sorting and checks for overlapping Modbus addresses.
+ *
+ * @param sort                The Modbus tag sorting structure.
+ * @param tag                 The Modbus write tag to be compared.
+ * @param tag_to_be_sorted    The Modbus write tag to be compared with.
+ * @return                   Returns true if the write tags should be sorted, false otherwise.
+ */
 static bool tag_sort_write(neu_tag_sort_t *sort, void *tag,
                            void *tag_to_be_sorted)
 {
