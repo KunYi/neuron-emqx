@@ -27,6 +27,18 @@
 #include "mqtt_handle.h"
 #include "mqtt_plugin.h"
 
+/**
+ * @brief Converts tag values to JSON format.
+ *
+ * This function takes an array of tag values and converts them into JSON format,
+ * populating a neu_json_read_resp_t structure. The resulting JSON data is stored
+ * in the provided `json` structure. If the conversion is successful, the function
+ * returns 0; otherwise, it returns -1.
+ *
+ * @param tags A UT_array containing tag values to be converted.
+ * @param json A pointer to neu_json_read_resp_t structure to store the resulting JSON.
+ * @return 0 on success, -1 on failure.
+ */
 static int tag_values_to_json(UT_array *tags, neu_json_read_resp_t *json)
 {
     int index = 0;
@@ -51,6 +63,19 @@ static int tag_values_to_json(UT_array *tags, neu_json_read_resp_t *json)
     return 0;
 }
 
+/**
+ * @brief Generates JSON for upload based on tag values and format.
+ *
+ * This function generates JSON for upload based on the specified format (values or tags).
+ * It utilizes the `neu_json_encode_with_mqtt` function for encoding, and the resulting
+ * JSON string is returned. The function handles freeing allocated memory for tags
+ * after generating the JSON string.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param data A pointer to neu_reqresp_trans_data_t structure containing data for upload.
+ * @param format The MQTT upload format (values or tags).
+ * @return A dynamically allocated JSON string on success, or NULL on failure.
+ */
 static char *generate_upload_json(neu_plugin_t *            plugin,
                                   neu_reqresp_trans_data_t *data,
                                   mqtt_upload_format_e      format)
@@ -90,6 +115,19 @@ static char *generate_upload_json(neu_plugin_t *            plugin,
     return json_str;
 }
 
+/**
+ * @brief Generates JSON response for read request.
+ *
+ * This function generates a JSON response for a read request based on the provided
+ * `data` containing tag values. The generated JSON is formatted for MQTT and returned
+ * as a dynamically allocated string. The caller is responsible for freeing the
+ * allocated memory after use.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param mqtt A pointer to neu_json_mqtt_t structure containing MQTT-related data.
+ * @param data A pointer to neu_resp_read_group_t structure containing tag values.
+ * @return A dynamically allocated JSON string on success, or NULL on failure.
+ */
 static char *generate_read_resp_json(neu_plugin_t *         plugin,
                                      neu_json_mqtt_t *      mqtt,
                                      neu_resp_read_group_t *data)
@@ -113,6 +151,19 @@ static char *generate_read_resp_json(neu_plugin_t *         plugin,
     return json_str;
 }
 
+/**
+ * @brief Generates JSON response for write request.
+ *
+ * This function generates a JSON response for a write request based on the provided
+ * `data` containing error information. The generated JSON is formatted for MQTT and
+ * returned as a dynamically allocated string. The caller is responsible for freeing
+ * the allocated memory after use.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param mqtt A pointer to neu_json_mqtt_t structure containing MQTT-related data.
+ * @param data A pointer to neu_resp_error_t structure containing error information.
+ * @return A dynamically allocated JSON string on success, or NULL on failure.
+ */
 static char *generate_write_resp_json(neu_plugin_t *    plugin,
                                       neu_json_mqtt_t * mqtt,
                                       neu_resp_error_t *data)
@@ -128,6 +179,20 @@ static char *generate_write_resp_json(neu_plugin_t *    plugin,
     return json_str;
 }
 
+/**
+ * @brief Sends a read request to the plugin.
+ *
+ * This function sends a read request to the specified plugin using the provided
+ * `mqtt` and `req` parameters. It constructs a read group request header and invokes
+ * the `neu_plugin_op` function. Ownership of `req->node` and `req->group` is moved
+ * to the function, and the caller should not access or free these pointers after
+ * the function call.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param mqtt A pointer to neu_json_mqtt_t structure containing MQTT-related data.
+ * @param req A pointer to neu_json_read_req_t structure containing read request data.
+ * @return 0 on success, -1 on failure.
+ */
 static inline int send_read_req(neu_plugin_t *plugin, neu_json_mqtt_t *mqtt,
                                 neu_json_read_req_t *req)
 {
@@ -152,6 +217,18 @@ static inline int send_read_req(neu_plugin_t *plugin, neu_json_mqtt_t *mqtt,
     return 0;
 }
 
+/**
+ * @brief Converts JSON value to tag value.
+ *
+ * This function converts a JSON value represented by `req` and type `t` to a
+ * tag value and stores it in the provided `value` parameter. The function handles
+ * different JSON value types, such as integer, string, double, boolean, and bytes.
+ *
+ * @param req A pointer to the JSON value to be converted.
+ * @param t The type of the JSON value.
+ * @param value A pointer to neu_dvalue_t where the converted tag value is stored.
+ * @return 0 on success, -1 on failure.
+ */
 static int json_value_to_tag_value(union neu_json_value *req,
                                    enum neu_json_type t, neu_dvalue_t *value)
 {
@@ -184,6 +261,20 @@ static int json_value_to_tag_value(union neu_json_value *req,
     return 0;
 }
 
+/**
+ * @brief Sends a write tag request to the plugin.
+ *
+ * This function sends a write tag request to the specified plugin using the provided
+ * `mqtt` and `req` parameters. It constructs a write tag request header and invokes
+ * the `neu_plugin_op` function. Ownership of `req->node`, `req->group`, and `req->tag`
+ * is moved to the function, and the caller should not access or free these pointers
+ * after the function call.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param mqtt A pointer to neu_json_mqtt_t structure containing MQTT-related data.
+ * @param req A pointer to neu_json_write_req_t structure containing write tag request data.
+ * @return 0 on success, -1 on failure.
+ */
 static int send_write_tag_req(neu_plugin_t *plugin, neu_json_mqtt_t *mqtt,
                               neu_json_write_req_t *req)
 {
@@ -216,6 +307,20 @@ static int send_write_tag_req(neu_plugin_t *plugin, neu_json_mqtt_t *mqtt,
     return 0;
 }
 
+/**
+ * @brief Sends a write tags request to the plugin.
+ *
+ * This function sends a write tags request to the specified plugin using the provided
+ * `mqtt` and `req` parameters. It constructs a write tags request header and invokes
+ * the `neu_plugin_op` function. Ownership of `req->node` and `req->group` is moved to
+ * the function, and the caller should not access or free these pointers after the
+ * function call.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param mqtt A pointer to neu_json_mqtt_t structure containing MQTT-related data.
+ * @param req A pointer to neu_json_write_tags_req_t structure containing write tags request data.
+ * @return 0 on success, -1 on failure.
+ */
 static int send_write_tags_req(neu_plugin_t *plugin, neu_json_mqtt_t *mqtt,
                                neu_json_write_tags_req_t *req)
 {
@@ -267,6 +372,20 @@ static int send_write_tags_req(neu_plugin_t *plugin, neu_json_mqtt_t *mqtt,
     return 0;
 }
 
+/**
+ * @brief Callback function for MQTT message publishing.
+ *
+ * This callback function is invoked when an MQTT message is published. It updates
+ * metrics based on the result of the publishing operation. The metrics include the
+ * total number of sent messages, total bytes sent, and per-time interval bytes sent.
+ *
+ * @param errcode The error code indicating the result of the publishing operation.
+ * @param qos The Quality of Service level used for the publishing operation.
+ * @param topic The MQTT topic on which the message was published.
+ * @param payload The payload of the published message.
+ * @param len The length of the payload.
+ * @param data A pointer to the data associated with the plugin.
+ */
 static void publish_cb(int errcode, neu_mqtt_qos_e qos, char *topic,
                        uint8_t *payload, uint32_t len, void *data)
 {
@@ -289,6 +408,20 @@ static void publish_cb(int errcode, neu_mqtt_qos_e qos, char *topic,
     free(payload);
 }
 
+/**
+ * @brief Publishes an MQTT message.
+ *
+ * This function publishes an MQTT message using the provided parameters, such as
+ * plugin, Quality of Service level (QoS), topic, payload, and payload length. It
+ * updates metrics based on the success or failure of the publishing operation.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param qos The Quality of Service level for the MQTT message.
+ * @param topic The MQTT topic on which to publish the message.
+ * @param payload The payload of the message.
+ * @param payload_len The length of the payload.
+ * @return 0 on success, NEU_ERR_MQTT_PUBLISH_FAILURE on failure.
+ */
 static inline int publish(neu_plugin_t *plugin, neu_mqtt_qos_e qos, char *topic,
                           char *payload, size_t payload_len)
 {
@@ -307,6 +440,21 @@ static inline int publish(neu_plugin_t *plugin, neu_mqtt_qos_e qos, char *topic,
     return rv;
 }
 
+/**
+ * @brief Handles the write request received through MQTT.
+ *
+ * This function handles a write request received through MQTT. It updates metrics
+ * based on the received message and extracts information from the payload. It then
+ * decodes the payload into a `neu_json_write_t` structure and sends the write request
+ * to the appropriate function for further processing. The function updates metrics
+ * based on the success or failure of the write request operation.
+ *
+ * @param qos The Quality of Service level for the received MQTT message.
+ * @param topic The MQTT topic on which the message was received.
+ * @param payload The payload of the received message.
+ * @param len The length of the payload.
+ * @param data A pointer to the data associated with the plugin.
+ */
 void handle_write_req(neu_mqtt_qos_e qos, const char *topic,
                       const uint8_t *payload, uint32_t len, void *data)
 {
@@ -362,6 +510,20 @@ void handle_write_req(neu_mqtt_qos_e qos, const char *topic,
     free(json_str);
 }
 
+/**
+ * @brief Handles the response for a write request received through MQTT.
+ *
+ * This function handles the response for a write request received through MQTT. It
+ * generates a JSON string containing the response information, publishes the JSON
+ * string to the specified MQTT topic, and updates metrics based on the success or
+ * failure of the publishing operation.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param mqtt_json A pointer to the neu_json_mqtt_t instance containing MQTT-specific
+ *                  information.
+ * @param data A pointer to the response data for the write request.
+ * @return 0 on success, an error code on failure.
+ */
 int handle_write_response(neu_plugin_t *plugin, neu_json_mqtt_t *mqtt_json,
                           neu_resp_error_t *data)
 {
@@ -398,6 +560,21 @@ end:
     return rv;
 }
 
+/**
+ * @brief Handles the read request received through MQTT.
+ *
+ * This function handles a read request received through MQTT. It updates metrics
+ * based on the received message, extracts information from the payload, decodes the
+ * payload into a `neu_json_read_req_t` structure, and sends the read request to the
+ * appropriate function for further processing. The function updates metrics based on
+ * the success or failure of the read request operation.
+ *
+ * @param qos The Quality of Service level for the received MQTT message.
+ * @param topic The MQTT topic on which the message was received.
+ * @param payload The payload of the received message.
+ * @param len The length of the payload.
+ * @param data A pointer to the data associated with the plugin.
+ */
 void handle_read_req(neu_mqtt_qos_e qos, const char *topic,
                      const uint8_t *payload, uint32_t len, void *data)
 {
@@ -449,6 +626,20 @@ void handle_read_req(neu_mqtt_qos_e qos, const char *topic,
     free(json_str);
 }
 
+/**
+ * @brief Handles the response for a read request received through MQTT.
+ *
+ * This function handles the response for a read request received through MQTT. It
+ * generates a JSON string containing the response information, publishes the JSON
+ * string to the specified MQTT topic, and updates metrics based on the success or
+ * failure of the publishing operation.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param mqtt_json A pointer to the neu_json_mqtt_t instance containing MQTT-specific
+ *                  information.
+ * @param data A pointer to the response data for the read request.
+ * @return 0 on success, an error code on failure.
+ */
 int handle_read_response(neu_plugin_t *plugin, neu_json_mqtt_t *mqtt_json,
                          neu_resp_read_group_t *data)
 {
@@ -484,6 +675,20 @@ end:
     return rv;
 }
 
+/**
+ * @brief Handles the transaction data for a plugin.
+ *
+ * This function handles the transaction data for a plugin. It checks the MQTT
+ * connection status, retrieves the routing information for the specified driver and
+ * group, generates a JSON string for the transaction data, and publishes the JSON
+ * string to the corresponding MQTT topic. Metrics are updated based on the success or
+ * failure of the publishing operation.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param trans_data A pointer to the neu_reqresp_trans_data_t structure containing
+ *                   transaction data.
+ * @return 0 on success, an error code on failure.
+ */
 int handle_trans_data(neu_plugin_t *            plugin,
                       neu_reqresp_trans_data_t *trans_data)
 {
@@ -522,6 +727,17 @@ int handle_trans_data(neu_plugin_t *            plugin,
     return rv;
 }
 
+/**
+ * @brief Generates the default MQTT upload topic based on subscription information.
+ *
+ * This function generates the default MQTT upload topic based on the subscription
+ * information, including the application, driver, and group.
+ *
+ * @param info A pointer to the neu_req_subscribe_t instance containing subscription
+ *             information.
+ * @return A dynamically allocated string representing the default upload topic.
+ *         The caller is responsible for freeing the memory.
+ */
 static inline char *default_upload_topic(neu_req_subscribe_t *info)
 {
     char *t = NULL;
@@ -529,6 +745,18 @@ static inline char *default_upload_topic(neu_req_subscribe_t *info)
     return t;
 }
 
+/**
+ * @brief Handles subscription to a group by updating the routing table.
+ *
+ * This function handles subscription to a group by updating the routing table with
+ * the specified driver, group, and MQTT topic. It also logs relevant information and
+ * frees allocated memory.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param sub_info A pointer to the neu_req_subscribe_t instance containing
+ *                 subscription information.
+ * @return 0 on success, an error code on failure.
+ */
 int handle_subscribe_group(neu_plugin_t *plugin, neu_req_subscribe_t *sub_info)
 {
     int rv = 0;
@@ -564,6 +792,18 @@ end:
     return rv;
 }
 
+/**
+ * @brief Handles the update of subscription information by updating the routing table.
+ *
+ * This function handles the update of subscription information by updating the routing
+ * table with the specified driver, group, and MQTT topic. It also logs relevant
+ * information and frees allocated memory.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param sub_info A pointer to the neu_req_subscribe_t instance containing
+ *                 subscription information.
+ * @return 0 on success, an error code on failure.
+ */
 int handle_update_subscribe(neu_plugin_t *plugin, neu_req_subscribe_t *sub_info)
 {
     int rv = 0;
@@ -597,6 +837,17 @@ end:
     return rv;
 }
 
+/**
+ * @brief Handles the unsubscription from a group by removing it from the routing table.
+ *
+ * This function handles the unsubscription from a group by removing the specified
+ * driver and group from the routing table. It also logs relevant information.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param unsub_info A pointer to the neu_req_unsubscribe_t instance containing
+ *                   unsubscription information.
+ * @return 0 on success, an error code on failure.
+ */
 int handle_unsubscribe_group(neu_plugin_t *         plugin,
                              neu_req_unsubscribe_t *unsub_info)
 {
@@ -614,6 +865,18 @@ int handle_del_group(neu_plugin_t *plugin, neu_req_del_group_t *req)
     return 0;
 }
 
+/**
+ * @brief Handles the update of group information by modifying the routing table.
+ *
+ * This function handles the update of group information by modifying the routing
+ * table with the specified driver, group, and new group name. It also logs relevant
+ * information.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param req A pointer to the neu_req_update_group_t instance containing
+ *            update information.
+ * @return 0 on success, an error code on failure.
+ */
 int handle_update_group(neu_plugin_t *plugin, neu_req_update_group_t *req)
 {
     route_tbl_update_group(&plugin->route_tbl, req->driver, req->group,
@@ -623,6 +886,18 @@ int handle_update_group(neu_plugin_t *plugin, neu_req_update_group_t *req)
     return 0;
 }
 
+/**
+ * @brief Handles the update of driver information by modifying the routing table.
+ *
+ * This function handles the update of driver information by modifying the routing
+ * table with the specified node and new driver name. It also logs relevant
+ * information.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param req A pointer to the neu_req_update_node_t instance containing
+ *            update information.
+ * @return 0 on success, an error code on failure.
+ */
 int handle_update_driver(neu_plugin_t *plugin, neu_req_update_node_t *req)
 {
     route_tbl_update_driver(&plugin->route_tbl, req->node, req->new_name);
@@ -631,6 +906,17 @@ int handle_update_driver(neu_plugin_t *plugin, neu_req_update_node_t *req)
     return 0;
 }
 
+/**
+ * @brief Handles the deletion of a driver by removing it from the routing table.
+ *
+ * This function handles the deletion of a driver by removing the specified node from
+ * the routing table. It also logs relevant information.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param req A pointer to the neu_reqresp_node_deleted_t instance containing
+ *            deletion information.
+ * @return 0 on success, an error code on failure.
+ */
 int handle_del_driver(neu_plugin_t *plugin, neu_reqresp_node_deleted_t *req)
 {
     route_tbl_del_driver(&plugin->route_tbl, req->node);

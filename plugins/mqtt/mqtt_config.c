@@ -26,6 +26,18 @@
 
 #define MB 1000000
 
+/**
+ * @brief Decodes a base64-encoded parameter and updates the provided JSON element.
+ *
+ * This function decodes a base64-encoded string and updates the given JSON element
+ * with the decoded result. It also handles error cases such as invalid base64 or
+ * an empty decoded string.
+ *
+ * @param plugin The Neu plugin structure.
+ * @param el The JSON element to be updated with the decoded value.
+ *
+ * @return 0 on success, -1 on failure.
+ */
 static inline int decode_b64_param(neu_plugin_t *plugin, neu_json_elem_t *el)
 {
     int   len = 0;
@@ -47,6 +59,19 @@ static inline int decode_b64_param(neu_plugin_t *plugin, neu_json_elem_t *el)
     return 0;
 }
 
+/**
+ * @brief Parses and decodes a base64-encoded parameter from a setting string.
+ *
+ * This function parses a base64-encoded parameter from a given setting string and
+ * updates the provided JSON element with the decoded value. It also handles error
+ * cases such as missing parameters or failure in decoding.
+ *
+ * @param plugin The Neu plugin structure.
+ * @param setting The setting string containing the base64-encoded parameter.
+ * @param el The JSON element to be updated with the decoded value.
+ *
+ * @return 0 on success, -1 on failure.
+ */
 static inline int parse_b64_param(neu_plugin_t *plugin, const char *setting,
                                   neu_json_elem_t *el)
 {
@@ -64,6 +89,23 @@ static inline int parse_b64_param(neu_plugin_t *plugin, const char *setting,
     return 0;
 }
 
+/**
+ * @brief Parses SSL-related parameters from a setting string and updates the provided JSON elements.
+ *
+ * This function parses SSL-related parameters, such as ssl, ca, cert, key, and keypass, from
+ * the given setting string and updates the corresponding JSON elements with the parsed values.
+ * It also handles optional and required parameters, decoding base64-encoded values where necessary.
+ *
+ * @param plugin The Neu plugin structure.
+ * @param setting The setting string containing SSL-related parameters.
+ * @param ssl The JSON element to be updated with the ssl parameter (optional).
+ * @param ca The JSON element to be updated with the ca parameter (optional).
+ * @param cert The JSON element to be updated with the cert parameter (optional).
+ * @param key The JSON element to be updated with the key parameter (required if cert is enabled).
+ * @param keypass The JSON element to be updated with the keypass parameter (optional).
+ *
+ * @return 0 on success, -1 on failure.
+ */
 static inline int parse_ssl_params(neu_plugin_t *plugin, const char *setting,
                                    neu_json_elem_t *ssl, neu_json_elem_t *ca,
                                    neu_json_elem_t *cert, neu_json_elem_t *key,
@@ -122,6 +164,23 @@ static inline int parse_ssl_params(neu_plugin_t *plugin, const char *setting,
     return 0;
 }
 
+/**
+ * @brief Parses cache-related parameters from a setting string and updates the provided JSON elements.
+ *
+ * This function parses cache-related parameters, such as offline-cache, cache-mem-size,
+ * cache-disk-size, and cache-sync-interval, from the given setting string and updates the
+ * corresponding JSON elements with the parsed values. It also handles optional and required
+ * parameters, ensuring their validity and providing backward compatibility with previous versions.
+ *
+ * @param plugin The Neu plugin structure.
+ * @param setting The setting string containing cache-related parameters.
+ * @param offline_cache The JSON element to be updated with the offline-cache flag (optional).
+ * @param cache_mem_size The JSON element to be updated with the cache-mem-size parameter (optional).
+ * @param cache_disk_size The JSON element to be updated with the cache-disk-size parameter (optional).
+ * @param cache_sync_interval The JSON element to be updated with the cache-sync-interval parameter (optional).
+ *
+ * @return 0 on success, -1 on failure.
+ */
 static int parse_cache_params(neu_plugin_t *plugin, const char *setting,
                               neu_json_elem_t *offline_cache,
                               neu_json_elem_t *cache_mem_size,
@@ -211,6 +270,21 @@ static int parse_cache_params(neu_plugin_t *plugin, const char *setting,
     return 0;
 }
 
+/**
+ * @brief Parses MQTT configuration parameters from a setting string and updates the provided MQTT configuration structure.
+ *
+ * This function parses various MQTT configuration parameters, including client-id, qos, format, write-req-topic,
+ * write-resp-topic, offline-cache, cache-mem-size, cache-disk-size, cache-sync-interval, host, port, username, password,
+ * ssl, ca, cert, key, and keypass, from the given setting string and updates the provided MQTT configuration structure
+ * with the parsed values. It also handles optional and required parameters, ensuring their validity and providing
+ * backward compatibility with previous versions.
+ *
+ * @param plugin The Neu plugin structure.
+ * @param setting The setting string containing MQTT configuration parameters.
+ * @param config The MQTT configuration structure to be updated with parsed values.
+ *
+ * @return 0 on success, -1 on failure.
+ */
 int mqtt_config_parse(neu_plugin_t *plugin, const char *setting,
                       mqtt_config_t *config)
 {
@@ -218,6 +292,7 @@ int mqtt_config_parse(neu_plugin_t *plugin, const char *setting,
     char *      err_param   = NULL;
     const char *placeholder = "********";
 
+    // Declare and initialize JSON elements for various MQTT configuration parameters
     neu_json_elem_t client_id = { .name = "client-id", .t = NEU_JSON_STR };
     neu_json_elem_t qos       = {
         .name      = "qos",
@@ -261,6 +336,7 @@ int mqtt_config_parse(neu_plugin_t *plugin, const char *setting,
         return -1;
     }
 
+    // Parse MQTT configuration parameters from the setting string
     ret = neu_parse_param(setting, &err_param, 7, &client_id, &qos, &format,
                           &write_req_topic, &write_resp_topic, &host, &port);
     if (0 != ret) {
@@ -340,6 +416,7 @@ int mqtt_config_parse(neu_plugin_t *plugin, const char *setting,
         goto error;
     }
 
+    // Update the MQTT configuration structure with the parsed values
     config->client_id           = client_id.v.val_str;
     config->qos                 = qos.v.val_int;
     config->format              = format.v.val_int;
@@ -359,6 +436,7 @@ int mqtt_config_parse(neu_plugin_t *plugin, const char *setting,
     config->key                 = key.v.val_str;
     config->keypass             = keypass.v.val_str;
 
+    // Log the parsed configuration values (excluding sensitive information)
     plog_notice(plugin, "config client-id       : %s", config->client_id);
     plog_notice(plugin, "config qos             : %d", config->qos);
     plog_notice(plugin, "config format          : %s",
@@ -375,6 +453,7 @@ int mqtt_config_parse(neu_plugin_t *plugin, const char *setting,
     plog_notice(plugin, "config host            : %s", config->host);
     plog_notice(plugin, "config port            : %" PRIu16, config->port);
 
+    // Log optional sensitive information only if present
     if (config->username) {
         plog_notice(plugin, "config username        : %s", config->username);
     }
@@ -414,6 +493,15 @@ error:
     return -1;
 }
 
+/**
+ * @brief Finalizes (cleans up) the MQTT configuration structure.
+ *
+ * This function frees the dynamically allocated memory used by various fields in the MQTT configuration structure
+ * and resets the structure to zero. It is intended to be called when the MQTT configuration is no longer needed
+ * to prevent memory leaks.
+ *
+ * @param config The MQTT configuration structure to be finalized.
+ */
 void mqtt_config_fini(mqtt_config_t *config)
 {
     free(config->client_id);

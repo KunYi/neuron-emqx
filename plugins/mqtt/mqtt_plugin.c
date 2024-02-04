@@ -24,8 +24,23 @@
 #include "mqtt_handle.h"
 #include "mqtt_plugin.h"
 
+/**
+ * @brief The MQTT plugin module instance.
+ *
+ * This is an instance of the neu_plugin_module_t structure representing the MQTT
+ * plugin module. It provides information about the module, such as its name and
+ * functions.
+ */
 const neu_plugin_module_t neu_plugin_module;
 
+/**
+ * @brief Callback function invoked upon successful connection to the MQTT broker.
+ *
+ * This function updates the plugin's link state to connected and logs relevant
+ * information.
+ *
+ * @param data A pointer to the neu_plugin_t instance.
+ */
 static void connect_cb(void *data)
 {
     neu_plugin_t *plugin      = data;
@@ -33,6 +48,14 @@ static void connect_cb(void *data)
     plog_notice(plugin, "plugin `%s` connected", neu_plugin_module.module_name);
 }
 
+/**
+ * @brief Callback function invoked upon disconnection from the MQTT broker.
+ *
+ * This function updates the plugin's link state to disconnected, updates relevant
+ * metrics, and logs disconnection information.
+ *
+ * @param data A pointer to the neu_plugin_t instance.
+ */
 static void disconnect_cb(void *data)
 {
     neu_plugin_t *plugin      = data;
@@ -44,6 +67,14 @@ static void disconnect_cb(void *data)
                 neu_plugin_module.module_name);
 }
 
+/**
+ * @brief Opens a new instance of the MQTT plugin.
+ *
+ * This function allocates memory for a new neu_plugin_t instance, initializes
+ * common plugin data, and returns the newly created instance.
+ *
+ * @return A pointer to the newly created neu_plugin_t instance.
+ */
 static neu_plugin_t *mqtt_plugin_open(void)
 {
     neu_plugin_t *plugin = (neu_plugin_t *) calloc(1, sizeof(neu_plugin_t));
@@ -51,6 +82,15 @@ static neu_plugin_t *mqtt_plugin_open(void)
     return plugin;
 }
 
+/**
+ * @brief Closes an instance of the MQTT plugin.
+ *
+ * This function frees the memory associated with the neu_plugin_t instance and logs
+ * relevant information.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance to be closed.
+ * @return NEU_ERR_SUCCESS on success, an error code on failure.
+ */
 static int mqtt_plugin_close(neu_plugin_t *plugin)
 {
     const char *name = neu_plugin_module.module_name;
@@ -60,6 +100,16 @@ static int mqtt_plugin_close(neu_plugin_t *plugin)
     return NEU_ERR_SUCCESS;
 }
 
+/**
+ * @brief Initializes the MQTT plugin instance.
+ *
+ * This function initializes the MQTT plugin instance by registering metrics and
+ * logging a success message.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param load A boolean indicating whether the plugin is being loaded.
+ * @return NEU_ERR_SUCCESS on success, an error code on failure.
+ */
 static int mqtt_plugin_init(neu_plugin_t *plugin, bool load)
 {
     (void) load;
@@ -86,6 +136,15 @@ static int mqtt_plugin_init(neu_plugin_t *plugin, bool load)
     return NEU_ERR_SUCCESS;
 }
 
+/**
+ * @brief Uninitializes the MQTT plugin instance.
+ *
+ * This function uninitializes the MQTT plugin instance by freeing resources and
+ * logging a success message.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @return NEU_ERR_SUCCESS on success, an error code on failure.
+ */
 static int mqtt_plugin_uninit(neu_plugin_t *plugin)
 {
     mqtt_config_fini(&plugin->config);
@@ -107,6 +166,19 @@ static int mqtt_plugin_uninit(neu_plugin_t *plugin)
     return NEU_ERR_SUCCESS;
 }
 
+/**
+ * @brief Configures the MQTT client settings for the plugin.
+ *
+ * This function configures the MQTT client settings based on the provided
+ * configuration. It sets the host address, port, client ID, callback functions,
+ * cache settings, user credentials, and TLS options. If successful, the client
+ * is configured accordingly.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param client A pointer to the neu_mqtt_client_t instance.
+ * @param config A pointer to the mqtt_config_t containing the configuration.
+ * @return NEU_ERR_SUCCESS on success, an error code on failure.
+ */
 static int config_mqtt_client(neu_plugin_t *plugin, neu_mqtt_client_t *client,
                               const mqtt_config_t *config)
 {
@@ -179,6 +251,17 @@ static int config_mqtt_client(neu_plugin_t *plugin, neu_mqtt_client_t *client,
     return rv;
 }
 
+/**
+ * @brief Creates MQTT topics for read requests and responses.
+ *
+ * This function generates MQTT topics for read requests and responses based on
+ * the plugin's name. It allocates memory for the topic strings and stores them
+ * in the plugin instance. If topics have already been created, the function
+ * returns without modifying existing topics.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @return NEU_ERR_SUCCESS on success, an error code on failure.
+ */
 static int create_topic(neu_plugin_t *plugin)
 {
     if (plugin->read_req_topic) {
@@ -203,6 +286,17 @@ static int create_topic(neu_plugin_t *plugin)
     return 0;
 }
 
+/**
+ * @brief Subscribes the plugin to MQTT topics for read and write requests.
+ *
+ * This function creates MQTT topics for read requests and subscribes the plugin
+ * to these topics. It also subscribes the plugin to the specified write request
+ * topic. If any step fails, the function logs an error and returns an error code.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param config A pointer to the mqtt_config_t containing the configuration.
+ * @return NEU_ERR_SUCCESS on success, an error code on failure.
+ */
 static int subscribe(neu_plugin_t *plugin, const mqtt_config_t *config)
 {
     if (0 != create_topic(plugin)) {
@@ -230,6 +324,18 @@ static int subscribe(neu_plugin_t *plugin, const mqtt_config_t *config)
     return 0;
 }
 
+/**
+ * @brief Unsubscribes the plugin from MQTT topics for read and write requests.
+ *
+ * This function unsubscribes the plugin from MQTT topics for read requests and
+ * the specified write request topic. It also waits for a short duration to allow
+ * ongoing messages to complete before returning. If any step fails, the function
+ * continues with the remaining steps and logs errors without halting execution.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param config A pointer to the mqtt_config_t containing the configuration.
+ * @return NEU_ERR_SUCCESS on success, an error code on failure.
+ */
 static int unsubscribe(neu_plugin_t *plugin, const mqtt_config_t *config)
 {
     neu_mqtt_client_unsubscribe(plugin->client, plugin->read_req_topic);
@@ -238,6 +344,19 @@ static int unsubscribe(neu_plugin_t *plugin, const mqtt_config_t *config)
     return 0;
 }
 
+/**
+ * @brief Configures the MQTT plugin with the provided settings.
+ *
+ * This function parses the input setting string, configures the MQTT client,
+ * and subscribes to MQTT topics. If the MQTT client is already started, it
+ * unsubscribes from existing topics, closes the current client, and restarts
+ * it with the new configuration. If any step fails, the function logs an error
+ * and returns an error code.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param setting A string containing the configuration settings.
+ * @return NEU_ERR_SUCCESS on success, an error code on failure.
+ */
 static int mqtt_plugin_config(neu_plugin_t *plugin, const char *setting)
 {
     int           rv          = 0;
@@ -301,6 +420,16 @@ error:
     return rv;
 }
 
+/**
+ * @brief Starts the MQTT plugin, opens the MQTT client, and subscribes to topics.
+ *
+ * This function opens the MQTT client and subscribes to MQTT topics. If any
+ * step fails, the function logs an error and returns an error code. It also
+ * logs a notice on successful startup.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @return NEU_ERR_SUCCESS on success, an error code on failure.
+ */
 static int mqtt_plugin_start(neu_plugin_t *plugin)
 {
     int         rv          = 0;
@@ -331,6 +460,15 @@ end:
     return rv;
 }
 
+/**
+ * @brief Stops the MQTT plugin by unsubscribing and closing the MQTT client.
+ *
+ * This function unsubscribes from MQTT topics and closes the MQTT client if
+ * it's open. It logs a notice on successful shutdown.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @return NEU_ERR_SUCCESS on success, an error code on failure.
+ */
 static int mqtt_plugin_stop(neu_plugin_t *plugin)
 {
     if (plugin->client) {
@@ -344,6 +482,19 @@ static int mqtt_plugin_stop(neu_plugin_t *plugin)
     return NEU_ERR_SUCCESS;
 }
 
+
+/**
+ * @brief Handles incoming requests and responses from the MQTT broker.
+ *
+ * This function processes incoming requests and responses based on their types,
+ * updating metrics and calling specific handler functions accordingly. It
+ * returns an error code on failure or NEU_ERR_SUCCESS on success.
+ *
+ * @param plugin A pointer to the neu_plugin_t instance.
+ * @param head A pointer to the neu_reqresp_head_t structure.
+ * @param data A pointer to the data associated with the request or response.
+ * @return NEU_ERR_SUCCESS on success, an error code on failure.
+ */
 static int mqtt_plugin_request(neu_plugin_t *plugin, neu_reqresp_head_t *head,
                                void *data)
 {
@@ -401,6 +552,9 @@ static int mqtt_plugin_request(neu_plugin_t *plugin, neu_reqresp_head_t *head,
     return error;
 }
 
+/**
+ * @brief Structure defining the interface functions for the MQTT plugin.
+ */
 static const neu_plugin_intf_funs_t plugin_intf_funs = {
     .open    = mqtt_plugin_open,
     .close   = mqtt_plugin_close,
@@ -415,6 +569,13 @@ static const neu_plugin_intf_funs_t plugin_intf_funs = {
 #define DESCRIPTION "Northbound MQTT plugin bases on NanoSDK."
 #define DESCRIPTION_ZH "基于 NanoSDK 的北向应用 MQTT 插件"
 
+/**
+ * @brief Structure defining the MQTT plugin module information.
+ *
+ * The structure contains information about the MQTT plugin module, including
+ * version, schema, module name, module description, interface functions,
+ * kind, type, display option, and single instance option.
+ */
 const neu_plugin_module_t neu_plugin_module = {
     .version         = NEURON_PLUGIN_VER_1_0,
     .schema          = "mqtt",
